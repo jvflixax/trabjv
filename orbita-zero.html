@@ -42,6 +42,11 @@ button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px va
 .up button:disabled{opacity:.4;cursor:default}
 .dica{font-size:12px;color:var(--mute);line-height:1.45}
 .dica b{color:var(--ink);font-weight:600}
+.card h3{margin:6px 0 0;font:700 14px var(--f-display);letter-spacing:.12em;text-transform:uppercase;color:var(--mute)}
+.item{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.item b{font-family:var(--f-display);letter-spacing:.04em;font-size:14px} .item small{color:var(--mute);font-size:12px}
+.item .acoes{grid-row:1/3;grid-column:2;display:flex;gap:6px} .item button{padding:9px 10px;font-size:11px}
+.r0{color:#c3cbd9} .r1{color:#5aa8ff} .r2{color:#c58cff} .r3{color:var(--gold)} .melhor{color:var(--plasma)}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
 </style>
@@ -66,6 +71,7 @@ button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px va
     <div class="dica"><b>Toque no espaço</b> para voar. <b>Toque num inimigo</b> para travar a mira: os canhões da nave atiram sozinhos enquanto ele estiver no alcance. Continue se mexendo para desviar dos tiros.</div>
     <div class="dica"><b>Golpe extra:</b> toque numa rocha cinza para agarrar com o ímã e depois num inimigo para arremessar. Quanto mais a rocha balança, mais forte o golpe.</div>
     <div class="dica">Inimigos derrubados soltam <b>sucata ▣</b>. Ela vai para o porão e só vira dinheiro quando você <b>entrega na Doca Vael</b>. Se a nave cair, a carga fica flutuando no lugar: volte para buscar.</div>
+    <div class="dica"><b>Equipamentos:</b> inimigos às vezes soltam caixas brilhantes com canhões, geradores de escudo e propulsores. Equipe na Oficina. Quanto mais forte o setor, mais itens raros.</div>
     <button id="bJogar">Decolar</button>
   </div>
 </div>
@@ -102,7 +108,7 @@ const TIPOS = {
   vespa:   {nome: 'Vespa Ácida',    hp: 90,  vel: 170, alc: 300, dano: 9,  cad: 1.1, raio: 16, tam: 44, cor: '#b6f05a', sc: 24, xp: 14},
   colosso: {nome: 'Colosso Âmbar',  hp: 420, vel: 60,  alc: 380, dano: 22, cad: 2.2, raio: 34, tam: 84, cor: '#ffb347', sc: 80, xp: 45},
 };
-let S, eu, inimigos, pedras, sucatas, tiros, part, ondas, textos, alvo, preso, querPegar, querArremessar;
+let S, eu, inimigos, caixas, pedras, sucatas, tiros, part, ondas, textos, alvo, preso, querPegar, querArremessar;
 let auto = false, pausado = false, rodando = false, cam = {x: 0, y: 0, z: 1, tremor: 0};
 let agora = 0, toastT = 0, proxIni = 0, proxPedra = 0, salvarT = 0, cheioT = 0, autoT = 0;
 
@@ -115,13 +121,16 @@ const UPS = [
 ];
 const danoTiro = n => 8 + n * 3, danoIma = n => 50 + n * 15, escMax = n => 80 + n * 40, vel = n => 260 + n * 22, porMax = n => 150 + n * 100;
 const hpMax = () => 150 + (S.nivel - 1) * 25, custo = (u, n) => Math.round(u.base * Math.pow(1.6, n));
+const bonus = k => S.eq[k] ? S.eq[k].b : 0;
+const danoAtual = () => Math.round(danoTiro(S.up.canhao) * (1 + bonus('canhao'))), escAtual = () => Math.round(escMax(S.up.escudo) * (1 + bonus('escudo'))), velAtual = () => Math.round(vel(S.up.motor) * (1 + bonus('motor')));
 const livre = () => porMax(S.up.porao) - S.porao, fmt = n => Math.round(n).toLocaleString('pt-BR');
 
 // ---------- save (v2). v1 = protótipo com cristais: cristais viram sucata no banco, laser vira canhões ----------
-function novo() { return {v: 2, banco: 0, porao: 0, nivel: 1, xp: 0, abates: 0, setor: 1, up: {canhao: 0, ima: 0, escudo: 0, motor: 0, porao: 0}, perdida: null}; }
+function novo() { return {v: 2, banco: 0, porao: 0, nivel: 1, xp: 0, abates: 0, setor: 1, up: {canhao: 0, ima: 0, escudo: 0, motor: 0, porao: 0}, perdida: null, inv: [], eq: {canhao: null, escudo: null, motor: null}}; }
 function migrar(d) {
   if (!d || !d.up) return novo();
-  if (d.v === 2) { if (d.up.canhao == null) d.up.canhao = d.up.ima; return d; }   // v2 sem canhões: o laser antigo tinha ido para o ímã
+  if (d.v === 2) { const b = novo();   // v2 antigo: completa campos novos; sem canhões, o laser antigo tinha ido para o ímã
+    return {...b, ...d, up: {...b.up, canhao: d.up.ima, ...d.up}, eq: {...b.eq, ...d.eq}, inv: d.inv || []}; }
   const u = d.up;
   return {...novo(), banco: d.cr || 0, nivel: d.nivel || 1, xp: d.xp || 0, abates: d.abates || 0, setor: d.setor || 1,
     up: {canhao: u.laser || 0, ima: 0, escudo: u.escudo || 0, motor: u.motor || 0, porao: 0}};
@@ -183,12 +192,24 @@ const PLANETA = sprite(700, g => {
   g.save(); g.scale(1, .28); g.strokeStyle = 'rgba(255,209,102,.13)'; g.lineWidth = 26; g.beginPath(); g.arc(0, 0, 330, 0, 6.283); g.stroke(); g.restore();  // o Cinturão de Vael
 });
 
+// ---------- equipamentos ----------
+const RAR = ['Comum', 'Raro', 'Épico', 'Lendário'], COR_RAR = ['#c3cbd9', '#5aa8ff', '#c58cff', '#ffd166'], VALOR_RAR = [15, 40, 120, 300];
+const SLOT = {canhao: {nome: 'Canhão', efeito: 'dano'}, escudo: {nome: 'Gerador', efeito: 'escudo'}, motor: {nome: 'Propulsor', efeito: 'velocidade'}};
+const SUFIXO = [['Remendado', 'de Sucata', 'Enferrujado'], ['Calibrado', 'de Vael', 'Reforçado'], ['Âmbar', 'Ressonante', 'Tempestade'], ['do Zero', 'Estelar']];
+const FAIXA = [[.05, .10], [.12, .20], [.22, .32], [.35, .50]];
+function sortearRar(setor) { const x = Math.random(); return x < .01 + .004 * setor ? 3 : x < .06 + .01 * setor ? 2 : x < .3 ? 1 : 0; }
+function novoItem(setor, sorte) {
+  const r = Math.max(...Array.from({length: sorte}, () => sortearRar(setor))), slot = ['canhao', 'escudo', 'motor'][Math.floor(Math.random() * 3)], f = FAIXA[r];
+  return {s: slot, r, b: Math.round(rnd(f[0], f[1]) * 100) / 100, nome: `${SLOT[slot].nome} ${SUFIXO[r][Math.floor(Math.random() * SUFIXO[r].length)]}`, valor: Math.round(VALOR_RAR[r] * (1 + (setor - 1) * .25))};
+}
+const descItem = it => `+${Math.round(it.b * 100)}% ${SLOT[it.s].efeito} · ${RAR[it.r]}`;
+
 // ---------- estado ----------
 function iniciar(dados) {
   S = dados && dados.up ? migrar(dados) : carregar();
-  inimigos = []; pedras = []; sucatas = []; tiros = []; part = []; ondas = []; textos = [];
+  inimigos = []; caixas = []; pedras = []; sucatas = []; tiros = []; part = []; ondas = []; textos = [];
   alvo = preso = querPegar = null; querArremessar = false;
-  eu = {x: DOCA.x, y: DOCA.y, dx: DOCA.x, dy: DOCA.y, ang: 0, vx: 0, vy: 0, hp: hpMax(), esc: escMax(S.up.escudo), ultHit: -99, ultTiro: 0, flash: 0, feixe: 0};
+  eu = {x: DOCA.x, y: DOCA.y, dx: DOCA.x, dy: DOCA.y, ang: 0, vx: 0, vy: 0, hp: hpMax(), esc: escAtual(), ultHit: -99, ultTiro: 0, flash: 0, feixe: 0};
   for (let i = 0; i < 26; i++) gerarInimigo();
   for (let i = 0; i < 55; i++) { const p = lugar(RDOCA, 0); gerarPedra(p.x, p.y); }
   for (let i = 0; i < 6; i++) gerarPedra(DOCA.x + rnd(-380, 380), DOCA.y + rnd(220, 420));   // munição perto da Doca para começar
@@ -217,7 +238,7 @@ function tremer(q) { if (!calmo) cam.tremor = Math.min(14, cam.tremor + q); }
 function texto(x, y, t, cor, g) { textos.push({x, y, t, cor, g, vida: .9}); }
 
 function hud() {
-  const hm = hpMax(), em = escMax(S.up.escudo), prox = S.nivel * 60, pm = porMax(S.up.porao);
+  const hm = hpMax(), em = escAtual(), prox = S.nivel * 60, pm = porMax(S.up.porao);
   $('bHp').style.width = (100 * Math.max(0, eu.hp) / hm) + '%'; $('tHp').textContent = `${Math.max(0, Math.ceil(eu.hp))}/${hm}`;
   $('bSh').style.width = (100 * eu.esc / em) + '%'; $('tSh').textContent = `${Math.ceil(eu.esc)}/${em}`;
   $('bXp').style.width = (100 * S.xp / prox) + '%'; $('tNv').textContent = `Nível ${S.nivel}`; $('tXp').textContent = `${S.xp}/${prox} xp`;
@@ -263,6 +284,7 @@ function matar(n) {
   const total = Math.round(n.t.sc * n.f), k = grande ? 6 : 3;
   for (let i = 0; i < k; i++) { const a = rnd(0, 6.28), s = rnd(60, 160); sucatas.push({x: n.x, y: n.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, v: Math.max(1, Math.round(total / k)), fase: rnd(0, 6)}); }
   for (let i = 0; i < (grande ? 2 : 1); i++) gerarPedra(n.x + rnd(-20, 20), n.y + rnd(-20, 20));   // o casco destruído vira munição
+  if (Math.random() < {drone: .06, vespa: .1, colosso: .35}[n.tipo] && caixas.length < 30) caixas.push({x: n.x, y: n.y, it: novoItem(S.setor, grande ? 2 : 1), fase: 0});
   S.xp += n.t.xp; S.abates++;
   while (S.xp >= S.nivel * 60) { S.xp -= S.nivel * 60; S.nivel++; eu.hp = hpMax(); toast(`Nível ${S.nivel}: casco reforçado`); onda(eu.x, eu.y, 90, '#ffd166'); }
   if (S.abates % 20 === 0) { S.setor++; toast(`Setor ${S.setor}: inimigos mais fortes, mais sucata`); }
@@ -298,20 +320,31 @@ $('bOfi').onclick = () => { montarOficina(); abrir('pOfi'); };
 $('bFechar').onclick = () => fechar('pOfi');
 $('bVoltar').onclick = () => fechar('pPausa');
 $('bJogar').onclick = () => { $('pIni').hidden = true; rodando = true; toast('Toque num inimigo para atirar', 4); };
-$('bRep').onclick = () => { $('pMorte').hidden = true; Object.assign(eu, {x: DOCA.x, y: DOCA.y, dx: DOCA.x, dy: DOCA.y, hp: hpMax(), esc: escMax(S.up.escudo)}); alvo = querPegar = null; querArremessar = false; rodando = true; hud(); };
+$('bRep').onclick = () => { $('pMorte').hidden = true; Object.assign(eu, {x: DOCA.x, y: DOCA.y, dx: DOCA.x, dy: DOCA.y, hp: hpMax(), esc: escAtual()}); alvo = querPegar = null; querArremessar = false; rodando = true; hud(); };
 document.addEventListener('visibilitychange', () => { if (!document.hidden) return; salvar(); if (rodando && !pausado) abrir('pPausa'); });
 function montarOficina() {
   $('ups').innerHTML = UPS.map(u => { const n = S.up[u.k], c = custo(u, n);
     return `<div class="up"><b>${u.nome} · nv ${n}</b><small>${u.desc(n)} → ${u.desc(n + 1).split(' ').pop()}</small><button data-k="${u.k}" ${S.banco < c ? 'disabled' : ''}>${fmt(c)} ▣</button></div>`; }).join('')
-    + `<p class="dica">No banco: ${fmt(S.banco)} ▣. A sucata do porão só conta depois de entregue na Doca. O piloto automático caça o inimigo mais próximo, arremessa rochas que estiverem perto e volta à Doca com o porão cheio ou o casco fraco.</p>`;
+    + `<p class="dica">No banco: ${fmt(S.banco)} ▣. A sucata do porão só conta depois de entregue na Doca. O piloto automático caça o inimigo mais próximo, arremessa rochas que estiverem perto e volta à Doca com o porão cheio ou o casco fraco.</p>`
+    + `<h3>Equipado</h3>` + Object.keys(SLOT).map(k => { const it = S.eq[k];
+      return `<div class="item"><b class="${it ? 'r' + it.r : ''}">${it ? it.nome : SLOT[k].nome + ': vazio'}</b><small>${it ? descItem(it) : 'Derrube inimigos para achar um'}</small></div>`; }).join('')
+    + `<h3>Hangar ${S.inv.length}/20</h3>` + (S.inv.length ? S.inv.map((it, i) =>
+      `<div class="item"><b class="r${it.r}">${it.nome}</b><small>${descItem(it)}${it.b > bonus(it.s) ? ' <span class="melhor">▲ melhor</span>' : ''}</small>`
+      + `<div class="acoes"><button data-eq="${i}">Equipar</button><button data-des="${i}">${fmt(it.valor)} ▣</button></div></div>`).join('')
+      : '<p class="dica">Vazio. Itens caem dos inimigos em caixas brilhantes: cinza comum, azul raro, roxo épico, dourado lendário. O botão com ▣ desmonta o item e vende a sucata.</p>');
 }
-$('ups').onclick = e => { const k = e.target.dataset && e.target.dataset.k; if (!k) return; const u = UPS.find(x => x.k === k), c = custo(u, S.up[k]);
-  if (S.banco < c) return; S.banco -= c; S.up[k]++; if (k === 'escudo') eu.esc = escMax(S.up.escudo); salvar(); montarOficina(); hud(); };
+$('ups').onclick = e => { const ds = e.target.dataset || {};
+  if (ds.eq != null) { const it = S.inv.splice(+ds.eq, 1)[0]; if (S.eq[it.s]) S.inv.splice(+ds.eq, 0, S.eq[it.s]); S.eq[it.s] = it; eu.esc = Math.min(eu.esc, escAtual()); salvar(); montarOficina(); hud(); return; }
+  if (ds.des != null) { const it = S.inv.splice(+ds.des, 1)[0]; S.banco += it.valor; salvar(); montarOficina(); hud(); return; }
+  const k = ds.k; if (!k) return; const u = UPS.find(x => x.k === k), c = custo(u, S.up[k]);
+  if (S.banco < c) return; S.banco -= c; S.up[k]++; if (k === 'escudo') eu.esc = escAtual(); salvar(); montarOficina(); hud(); };
 
 function pilotoAuto() {
   const naDoca = dist(eu, DOCA) < RDOCA;
   if (eu.hp < hpMax() * .35 || livre() <= 0 || (naDoca && eu.hp < hpMax() * .95)) { alvo = null; querArremessar = false; if (!naDoca) { eu.dx = DOCA.x; eu.dy = DOCA.y; } return; }
   if (!preso && !querPegar) { const p = maisPerto(pedras.filter(p => p.estado === 'solto'), eu.x, eu.y); if (p && dist(p, eu) < ALC_IMA) querPegar = p; }
+  const cx2 = maisPerto(caixas, eu.x, eu.y);
+  if (cx2 && dist(cx2, eu) < 450 && S.inv.length < 20) { alvo = null; querArremessar = false; eu.dx = cx2.x; eu.dy = cx2.y; return; }
   const n = maisPerto(inimigos, eu.x, eu.y); if (!n) return;
   alvo = n; querArremessar = !!preso;
   const a = Math.atan2(eu.y - n.y, eu.x - n.x) + .5;   // aproxima de lado: a nave fica em movimento e desvia dos tiros
@@ -327,7 +360,7 @@ function passo(dt) {
   if (pedras.length < 61 && agora > proxPedra) { const p = lugar(0, 700); gerarPedra(p.x, p.y); proxPedra = agora + 1.5; }
   if (auto && (autoT -= dt) <= 0) { autoT = .25; pilotoAuto(); }
   if (alvo && alvo.morto) { alvo = null; querArremessar = false; }
-  const v = vel(S.up.motor);
+  const v = velAtual();
 
   // ímã: agarra a rocha pedida quando ela entra no alcance
   if (querPegar && querPegar.estado !== 'solto') querPegar = null;
@@ -336,7 +369,7 @@ function passo(dt) {
   if (alvo && dist(alvo, eu) < ALC_TIRO && agora - eu.ultTiro > .3) {   // projéteis saem alternando dos dois canhões
     eu.ultTiro = agora; eu.lado = -(eu.lado || 1);
     const c = Math.cos(eu.ang), s = Math.sin(eu.ang), bx = eu.x + c * 22 - s * 6.3 * eu.lado, by = eu.y + s * 22 + c * 6.3 * eu.lado, a = Math.atan2(alvo.y - by, alvo.x - bx);
-    tiros.push({x: bx, y: by, vx: Math.cos(a) * 950, vy: Math.sin(a) * 950, vida: .7, meu: true, dano: danoTiro(S.up.canhao), cor: '#4de2c5'});
+    tiros.push({x: bx, y: by, vx: Math.cos(a) * 950, vy: Math.sin(a) * 950, vida: .7, meu: true, dano: danoAtual(), cor: '#4de2c5'});
     explodir(bx, by, '#e9fffa', 3, 70);
   }
 
@@ -348,7 +381,7 @@ function passo(dt) {
   if (rumo !== null) { const da = rumo - eu.ang; eu.ang += Math.atan2(Math.sin(da), Math.cos(da)) * Math.min(1, 12 * dt); }
   eu.vx = (eu.x - ox) / dt; eu.vy = (eu.y - oy) / dt;
   eu.flash = Math.max(0, eu.flash - dt); eu.feixe = Math.max(0, eu.feixe - dt);
-  if (agora - eu.ultHit > 5) eu.esc = Math.min(escMax(S.up.escudo), eu.esc + escMax(S.up.escudo) * .12 * dt);
+  if (agora - eu.ultHit > 5) eu.esc = Math.min(escAtual(), eu.esc + escAtual() * .12 * dt);
   if (dist(eu, DOCA) < RDOCA) {
     eu.hp = Math.min(hpMax(), eu.hp + 40 * dt);   // doca conserta o casco
     if (S.porao > 0) { toast(`+${fmt(S.porao)} ▣ entregues na Doca`); S.banco += S.porao; S.porao = 0; onda(DOCA.x, DOCA.y, 120, '#ffd166'); salvar(); }
@@ -412,6 +445,11 @@ function passo(dt) {
     if (d < 28 && livre() > 0) { const q = Math.min(c.v, livre()); S.porao += q; c.v -= q; explodir(c.x, c.y, '#ffd166', 5, 90); if (c.v <= 0) sucatas.splice(i, 1); }
   }
   if (sucatas.length > 160) sucatas.splice(0, sucatas.length - 160);
+  for (let i = caixas.length - 1; i >= 0; i--) { const c = caixas[i]; c.fase += dt;
+    if (dist(c, eu) < 38) {
+      if (S.inv.length >= 20) { if (agora > cheioT) { cheioT = agora + 4; toast('Hangar cheio: desmonte itens na Oficina'); } continue; }
+      S.inv.unshift(c.it); caixas.splice(i, 1); texto(c.x, c.y - 20, c.it.nome, COR_RAR[c.it.r], true); onda(c.x, c.y, 70, COR_RAR[c.it.r]); toast(`Novo item: ${c.it.nome} (${RAR[c.it.r]})`); salvar();
+    } }
   const pd = S.perdida;
   if (pd && Math.hypot(pd.x - eu.x, pd.y - eu.y) < 50) {
     const q = Math.min(pd.v, livre());
@@ -466,6 +504,10 @@ function desenhar(rel) {
     cx.fillStyle = '#ff7a45'; cx.font = '700 12px Chakra Petch, sans-serif'; cx.fillText(`CARGA ${fmt(pd.v)} ▣`, pd.x, pd.y + 30);
   }
 
+  for (const c of caixas) { if (!vis(c.x, c.y)) continue; const cor = COR_RAR[c.it.r], k = (rel % 1.2) / 1.2;
+    cx.globalAlpha = .55 * (1 - k); cx.strokeStyle = cor; cx.lineWidth = 2; cx.beginPath(); cx.arc(c.x, c.y, 14 + k * 26, 0, 6.283); cx.stroke(); cx.globalAlpha = 1;
+    cx.save(); cx.translate(c.x, c.y); cx.rotate(rel * .8); cx.fillStyle = '#0c1424'; cx.fillRect(-10, -10, 20, 20); cx.strokeStyle = cor; cx.lineWidth = 2.5; cx.strokeRect(-10, -10, 20, 20);
+    cx.fillStyle = cor; cx.fillRect(-3, -3, 6, 6); cx.restore(); }
   for (const c of sucatas) if (vis(c.x, c.y)) pintar(SPR.porca, c.x, c.y, c.fase * 2, 14 + Math.sin(c.fase * 5) * 2);
   for (const p of pedras) { if (!vis(p.x, p.y)) continue; const tam = 40 * p.r / 15;
     if (p === querPegar) { cx.strokeStyle = 'rgba(77,226,197,.7)'; cx.lineWidth = 1.5; cx.setLineDash([4, 5]); cx.beginPath(); cx.arc(p.x, p.y, p.r + 10, rel * 2, rel * 2 + 6.283); cx.stroke(); cx.setLineDash([]); }
@@ -502,12 +544,12 @@ function desenhar(rel) {
   }
   if (rodando || !$('pIni').hidden) {
     cx.save(); cx.translate(eu.x, eu.y); cx.rotate(eu.ang);
-    const sp = Math.min(1, Math.hypot(eu.vx, eu.vy) / vel(S.up.motor)), fl = 4 + sp * 14 + Math.random() * 4;
+    const sp = Math.min(1, Math.hypot(eu.vx, eu.vy) / velAtual()), fl = 4 + sp * 14 + Math.random() * 4;
     for (const [x, y, s] of [[-22, -10, 1], [-24, 10, 1.3]]) {
       cx.fillStyle = 'rgba(77,226,197,.75)'; cx.beginPath(); cx.moveTo(x, y - 3 * s); cx.lineTo(x - fl * s, y); cx.lineTo(x, y + 3 * s); cx.fill();
       cx.fillStyle = '#e9fffa'; cx.beginPath(); cx.moveTo(x, y - 1.4 * s); cx.lineTo(x - fl * s * .45, y); cx.lineTo(x, y + 1.4 * s); cx.fill(); }
     cx.drawImage(SPR.nave, -28, -28, 56, 56);
-    if (eu.esc > 0 || eu.flash > 0) { const em = escMax(S.up.escudo);
+    if (eu.esc > 0 || eu.flash > 0) { const em = escAtual();
       cx.strokeStyle = `rgba(90,168,255,${Math.min(1, .12 + .3 * eu.esc / em + eu.flash * 2.5)})`; cx.lineWidth = 2 + eu.flash * 8; cx.beginPath(); cx.arc(0, 0, 31, 0, 6.283); cx.stroke();
       if (eu.flash > 0) { cx.fillStyle = `rgba(90,168,255,${eu.flash * .5})`; cx.fill(); } }
     cx.restore();
@@ -523,6 +565,7 @@ function desenhar(rel) {
   mx.strokeStyle = 'rgba(77,226,197,.7)'; mx.lineWidth = 2; mx.beginPath(); mx.arc(DOCA.x * k, DOCA.y * k, 7, 0, 6.283); mx.stroke();
   mx.fillStyle = 'rgba(154,163,181,.45)'; for (const p of pedras) mx.fillRect(p.x * k - 1, p.y * k - 1, 2, 2);
   mx.fillStyle = '#ffd166'; for (const c of sucatas) mx.fillRect(c.x * k - 1.5, c.y * k - 1.5, 3, 3);
+  for (const c of caixas) { mx.fillStyle = COR_RAR[c.it.r]; mx.fillRect(c.x * k - 3, c.y * k - 3, 6, 6); }
   for (const n of inimigos) { mx.fillStyle = n.raiva ? '#ff7a45' : '#7f8fae'; mx.fillRect(n.x * k - 2, n.y * k - 2, 4, 4); }
   if (pd && rel % 1 < .6) { mx.fillStyle = '#ff7a45'; mx.fillRect(pd.x * k - 4, pd.y * k - 4, 8, 8); }
   mx.fillStyle = '#4de2c5'; mx.beginPath(); mx.arc(eu.x * k, eu.y * k, 4, 0, 6.283); mx.fill();
