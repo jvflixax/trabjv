@@ -46,7 +46,7 @@ button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px va
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
 </style>
 
-<canvas id="cv" aria-label="Campo de jogo: toque numa rocha para agarrar, toque num inimigo para arremessar"></canvas>
+<canvas id="cv" aria-label="Campo de jogo: toque no espaço para voar, toque num inimigo para atirar"></canvas>
 <div class="hud">
   <div class="bars">
     <div class="lbl"><span>Casco</span><span id="tHp"></span></div><div class="bar hp"><i id="bHp"></i></div>
@@ -62,8 +62,9 @@ button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px va
 <div class="panel" id="pIni">
   <div class="card">
     <h2>Órbita Zero</h2>
-    <p>Você pilota uma caça-sucata no Cinturão de Vael. Sua arma é um ímã: agarre rochas e destroços e arremesse nos inimigos.</p>
-    <div class="dica"><b>Toque numa rocha</b> para agarrar com o ímã. <b>Toque num inimigo</b> para arremessar. Quanto mais a rocha balança atrás da nave, mais forte o golpe: faça curvas antes de lançar. Sem rocha, um laser fraco atira sozinho.</div>
+    <p>Você pilota uma caça-sucata no Cinturão de Vael. Derrube drones com os canhões, junte sucata e melhore a nave na oficina.</p>
+    <div class="dica"><b>Toque no espaço</b> para voar. <b>Toque num inimigo</b> para travar a mira: os canhões da nave atiram sozinhos enquanto ele estiver no alcance. Continue se mexendo para desviar dos tiros.</div>
+    <div class="dica"><b>Golpe extra:</b> toque numa rocha cinza para agarrar com o ímã e depois num inimigo para arremessar. Quanto mais a rocha balança, mais forte o golpe.</div>
     <div class="dica">Inimigos derrubados soltam <b>sucata ▣</b>. Ela vai para o porão e só vira dinheiro quando você <b>entrega na Doca Vael</b>. Se a nave cair, a carga fica flutuando no lugar: volte para buscar.</div>
     <button id="bJogar">Decolar</button>
   </div>
@@ -94,7 +95,7 @@ button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px va
 (() => {
 const cv = document.getElementById('cv'), cx = cv.getContext('2d'), mini = document.getElementById('mini'), mx = mini.getContext('2d');
 const $ = id => document.getElementById(id);
-const W = 5200, H = 3400, DOCA = {x: 600, y: 600}, RDOCA = 170, ALC_IMA = 210, ALC_LANCE = 600, ALC_LASER = 300;
+const W = 5200, H = 3400, DOCA = {x: 600, y: 600}, RDOCA = 170, ALC_IMA = 210, ALC_LANCE = 600, ALC_TIRO = 380;
 const calmo = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TIPOS = {
   drone:   {nome: 'Drone Ferrugem', hp: 60,  vel: 90,  alc: 260, dano: 6,  cad: 1.6, raio: 18, tam: 44, cor: '#c9824f', sc: 14, xp: 8},
@@ -106,23 +107,24 @@ let auto = false, pausado = false, rodando = false, cam = {x: 0, y: 0, z: 1, tre
 let agora = 0, toastT = 0, proxIni = 0, proxPedra = 0, salvarT = 0, cheioT = 0, autoT = 0;
 
 const UPS = [
-  {k: 'ima',    nome: 'Ímã',    desc: n => `Dano do arremesso ${danoIma(n)}`, base: 60},
+  {k: 'canhao', nome: 'Canhões', desc: n => `Dano por tiro ${danoTiro(n)}`, base: 60},
+  {k: 'ima',    nome: 'Ímã',    desc: n => `Dano do arremesso ${danoIma(n)}`, base: 65},
   {k: 'escudo', nome: 'Escudo', desc: n => `Escudo máximo ${escMax(n)}`, base: 50},
   {k: 'motor',  nome: 'Motor',  desc: n => `Velocidade ${vel(n)}`, base: 70},
   {k: 'porao',  nome: 'Porão',  desc: n => `Carga máxima ${porMax(n)}`, base: 55},
 ];
-const danoIma = n => 50 + n * 15, escMax = n => 80 + n * 40, vel = n => 260 + n * 22, porMax = n => 150 + n * 100;
-const hpMax = () => 150 + (S.nivel - 1) * 25, custo = (u, n) => Math.round(u.base * Math.pow(1.6, n)), danoLaser = () => 5 + S.nivel;
+const danoTiro = n => 8 + n * 3, danoIma = n => 50 + n * 15, escMax = n => 80 + n * 40, vel = n => 260 + n * 22, porMax = n => 150 + n * 100;
+const hpMax = () => 150 + (S.nivel - 1) * 25, custo = (u, n) => Math.round(u.base * Math.pow(1.6, n));
 const livre = () => porMax(S.up.porao) - S.porao, fmt = n => Math.round(n).toLocaleString('pt-BR');
 
-// ---------- save (v2). v1 = protótipo com cristais: cristais viram sucata no banco, laser vira ímã ----------
-function novo() { return {v: 2, banco: 0, porao: 0, nivel: 1, xp: 0, abates: 0, setor: 1, up: {ima: 0, escudo: 0, motor: 0, porao: 0}, perdida: null}; }
+// ---------- save (v2). v1 = protótipo com cristais: cristais viram sucata no banco, laser vira canhões ----------
+function novo() { return {v: 2, banco: 0, porao: 0, nivel: 1, xp: 0, abates: 0, setor: 1, up: {canhao: 0, ima: 0, escudo: 0, motor: 0, porao: 0}, perdida: null}; }
 function migrar(d) {
   if (!d || !d.up) return novo();
-  if (d.v === 2) return d;
+  if (d.v === 2) { if (d.up.canhao == null) d.up.canhao = d.up.ima; return d; }   // v2 sem canhões: o laser antigo tinha ido para o ímã
   const u = d.up;
   return {...novo(), banco: d.cr || 0, nivel: d.nivel || 1, xp: d.xp || 0, abates: d.abates || 0, setor: d.setor || 1,
-    up: {ima: u.laser || 0, escudo: u.escudo || 0, motor: u.motor || 0, porao: 0}};
+    up: {canhao: u.laser || 0, ima: 0, escudo: u.escudo || 0, motor: u.motor || 0, porao: 0}};
 }
 function carregar() { try { return migrar(JSON.parse(localStorage.getItem('orbita-zero') || 'null')); } catch (e) { return novo(); } }
 function salvar() { try { localStorage.setItem('orbita-zero', JSON.stringify(S)); } catch (e) {} }
@@ -137,8 +139,8 @@ const SPR = {
     poli(g, [[22, 0], [8, -9], [-6, -12], [-16, -8], [-18, 0], [-16, 9], [-4, 13], [8, 8]], '#c9d3e6', '#24324d');
     poli(g, [[2, -9], [-8, -11], [-10, -4], [0, -4]], '#d9965a');
     poli(g, [[-6, 4], [-14, 6], [-12, 11], [-3, 11]], '#8a9bb8');
-    g.strokeStyle = '#ff7a45'; g.lineWidth = 2.4; g.lineCap = 'round';
-    g.beginPath(); g.moveTo(16, -5); g.lineTo(25, -8); g.moveTo(16, 5); g.lineTo(25, 8); g.stroke();
+    g.fillStyle = '#5d6b85'; g.fillRect(8, -8, 15, 3.4); g.fillRect(8, 4.6, 15, 3.4);   // canhões
+    g.fillStyle = '#ff7a45'; g.fillRect(21, -8, 3, 3.4); g.fillRect(21, 4.6, 3, 3.4);
     g.beginPath(); g.ellipse(5, 0, 6, 3.6, 0, 0, 6.283); g.fillStyle = '#4de2c5'; g.fill(); bola(g, 7, -1.2, 1.4, '#e9fffa');
     for (const [x, y] of [[-12, -6], [-12, 6], [0, 9], [-2, -7]]) bola(g, x, y, .9, '#24324d');
   }),
@@ -267,7 +269,7 @@ function matar(n) {
   salvar();
 }
 
-// ---------- entrada: toque na rocha agarra; toque no inimigo arremessa (ou mira o laser); toque no espaço move ----------
+// ---------- entrada: toque na rocha agarra; toque no inimigo trava a mira (e arremessa se houver rocha); toque no espaço move ----------
 cv.addEventListener('pointerdown', ev => {
   if (!rodando || pausado) return;
   const r = cv.getBoundingClientRect(), x = (ev.clientX - r.left - cv.clientWidth / 2) / cam.z + cam.x, y = (ev.clientY - r.top - cv.clientHeight / 2) / cam.z + cam.y;
@@ -275,9 +277,9 @@ cv.addEventListener('pointerdown', ev => {
   const n = maisPerto(inimigos, x, y);
   if (n && Math.hypot(n.x - x, n.y - y) < n.t.raio + tol) {
     alvo = n; n.raiva = true; querPegar = null; querArremessar = !!preso;
-    const d = dist(eu, n), quer = preso ? ALC_LANCE - 80 : ALC_LASER - 60;
+    const d = dist(eu, n), quer = preso ? ALC_LANCE - 80 : ALC_TIRO - 80;
     if (d > quer) { const a = Math.atan2(eu.y - n.y, eu.x - n.x); eu.dx = limX(n.x + Math.cos(a) * quer); eu.dy = limY(n.y + Math.sin(a) * quer); }
-    toast(preso ? `Arremesso em ${n.t.nome}` : `Laser em ${n.t.nome}`, 1.4);
+    toast(preso ? `Arremesso em ${n.t.nome}` : `Mira em ${n.t.nome}`, 1.4);
     return;
   }
   const p = maisPerto(pedras.filter(p => p.estado === 'solto'), x, y);
@@ -295,13 +297,13 @@ $('bAuto').onclick = () => { auto = !auto; $('bAuto').classList.toggle('on', aut
 $('bOfi').onclick = () => { montarOficina(); abrir('pOfi'); };
 $('bFechar').onclick = () => fechar('pOfi');
 $('bVoltar').onclick = () => fechar('pPausa');
-$('bJogar').onclick = () => { $('pIni').hidden = true; rodando = true; toast('Toque numa rocha cinza para agarrar', 4); };
+$('bJogar').onclick = () => { $('pIni').hidden = true; rodando = true; toast('Toque num inimigo para atirar', 4); };
 $('bRep').onclick = () => { $('pMorte').hidden = true; Object.assign(eu, {x: DOCA.x, y: DOCA.y, dx: DOCA.x, dy: DOCA.y, hp: hpMax(), esc: escMax(S.up.escudo)}); alvo = querPegar = null; querArremessar = false; rodando = true; hud(); };
 document.addEventListener('visibilitychange', () => { if (!document.hidden) return; salvar(); if (rodando && !pausado) abrir('pPausa'); });
 function montarOficina() {
   $('ups').innerHTML = UPS.map(u => { const n = S.up[u.k], c = custo(u, n);
     return `<div class="up"><b>${u.nome} · nv ${n}</b><small>${u.desc(n)} → ${u.desc(n + 1).split(' ').pop()}</small><button data-k="${u.k}" ${S.banco < c ? 'disabled' : ''}>${fmt(c)} ▣</button></div>`; }).join('')
-    + `<p class="dica">No banco: ${fmt(S.banco)} ▣. A sucata do porão só conta depois de entregue na Doca. O piloto automático agarra rochas, arremessa no inimigo mais próximo e volta à Doca com o porão cheio ou o casco fraco.</p>`;
+    + `<p class="dica">No banco: ${fmt(S.banco)} ▣. A sucata do porão só conta depois de entregue na Doca. O piloto automático caça o inimigo mais próximo, arremessa rochas que estiverem perto e volta à Doca com o porão cheio ou o casco fraco.</p>`;
 }
 $('ups').onclick = e => { const k = e.target.dataset && e.target.dataset.k; if (!k) return; const u = UPS.find(x => x.k === k), c = custo(u, S.up[k]);
   if (S.banco < c) return; S.banco -= c; S.up[k]++; if (k === 'escudo') eu.esc = escMax(S.up.escudo); salvar(); montarOficina(); hud(); };
@@ -309,11 +311,11 @@ $('ups').onclick = e => { const k = e.target.dataset && e.target.dataset.k; if (
 function pilotoAuto() {
   const naDoca = dist(eu, DOCA) < RDOCA;
   if (eu.hp < hpMax() * .35 || livre() <= 0 || (naDoca && eu.hp < hpMax() * .95)) { alvo = null; querArremessar = false; if (!naDoca) { eu.dx = DOCA.x; eu.dy = DOCA.y; } return; }
-  if (!preso) { const p = maisPerto(pedras.filter(p => p.estado === 'solto'), eu.x, eu.y); if (p) { querPegar = p; eu.dx = limX(p.x); eu.dy = limY(p.y); } return; }
+  if (!preso && !querPegar) { const p = maisPerto(pedras.filter(p => p.estado === 'solto'), eu.x, eu.y); if (p && dist(p, eu) < ALC_IMA) querPegar = p; }
   const n = maisPerto(inimigos, eu.x, eu.y); if (!n) return;
-  alvo = n; querArremessar = true;
-  const a = Math.atan2(eu.y - n.y, eu.x - n.x) + .5;   // aproxima de lado: a nave faz curva e a rocha ganha balanço
-  eu.dx = limX(n.x + Math.cos(a) * 380); eu.dy = limY(n.y + Math.sin(a) * 380);
+  alvo = n; querArremessar = !!preso;
+  const a = Math.atan2(eu.y - n.y, eu.x - n.x) + .5;   // aproxima de lado: a nave fica em movimento e desvia dos tiros
+  eu.dx = limX(n.x + Math.cos(a) * 300); eu.dy = limY(n.y + Math.sin(a) * 300);
 }
 
 // ---------- simulação ----------
@@ -331,14 +333,19 @@ function passo(dt) {
   if (querPegar && querPegar.estado !== 'solto') querPegar = null;
   if (querPegar && !preso && dist(querPegar, eu) < ALC_IMA) { preso = querPegar; preso.estado = 'preso'; preso.carga = .6; querPegar = null; eu.feixe = .3; }
   if (preso && alvo && querArremessar && dist(alvo, eu) < ALC_LANCE) lancar();
-  if (alvo && dist(alvo, eu) < ALC_LASER && agora - eu.ultTiro > .6) {
-    eu.ultTiro = agora; tiros.push({de: {x: eu.x, y: eu.y}, para: {x: alvo.x, y: alvo.y}, vida: .1, cor: '#4de2c5', laser: true}); acertar(alvo, danoLaser(), false);
+  if (alvo && dist(alvo, eu) < ALC_TIRO && agora - eu.ultTiro > .3) {   // projéteis saem alternando dos dois canhões
+    eu.ultTiro = agora; eu.lado = -(eu.lado || 1);
+    const c = Math.cos(eu.ang), s = Math.sin(eu.ang), bx = eu.x + c * 22 - s * 6.3 * eu.lado, by = eu.y + s * 22 + c * 6.3 * eu.lado, a = Math.atan2(alvo.y - by, alvo.x - bx);
+    tiros.push({x: bx, y: by, vx: Math.cos(a) * 950, vy: Math.sin(a) * 950, vida: .7, meu: true, dano: danoTiro(S.up.canhao), cor: '#4de2c5'});
+    explodir(bx, by, '#e9fffa', 3, 70);
   }
 
   // nave
   const ox = eu.x, oy = eu.y, ddx = eu.dx - eu.x, ddy = eu.dy - eu.y, dd = Math.hypot(ddx, ddy);
-  if (dd > 2) { const s = Math.min(dd, v * dt); eu.x += ddx / dd * s; eu.y += ddy / dd * s;
-    const da = Math.atan2(ddy, ddx) - eu.ang; eu.ang += Math.atan2(Math.sin(da), Math.cos(da)) * Math.min(1, 10 * dt); }
+  let rumo = null;
+  if (dd > 2) { const s = Math.min(dd, v * dt); eu.x += ddx / dd * s; eu.y += ddy / dd * s; rumo = Math.atan2(ddy, ddx); }
+  if (alvo && dist(alvo, eu) < ALC_TIRO + 120) rumo = Math.atan2(alvo.y - eu.y, alvo.x - eu.x);   // de frente para o alvo: os tiros saem do bico
+  if (rumo !== null) { const da = rumo - eu.ang; eu.ang += Math.atan2(Math.sin(da), Math.cos(da)) * Math.min(1, 12 * dt); }
   eu.vx = (eu.x - ox) / dt; eu.vy = (eu.y - oy) / dt;
   eu.flash = Math.max(0, eu.flash - dt); eu.feixe = Math.max(0, eu.feixe - dt);
   if (agora - eu.ultHit > 5) eu.esc = Math.min(escMax(S.up.escudo), eu.esc + escMax(S.up.escudo) * .12 * dt);
@@ -391,8 +398,8 @@ function passo(dt) {
     if (olha !== null) { const da = olha - n.ang; n.ang += Math.atan2(Math.sin(da), Math.cos(da)) * Math.min(1, 5 * dt); }
   }
   for (const t of tiros) {
-    t.vida -= dt; if (t.laser) continue;
-    t.x += t.vx * dt; t.y += t.vy * dt;
+    t.vida -= dt; t.x += t.vx * dt; t.y += t.vy * dt;
+    if (t.meu) { for (const n of inimigos) if (!n.morto && Math.hypot(n.x - t.x, n.y - t.y) < n.t.raio + 4) { t.vida = 0; explodir(t.x, t.y, '#4de2c5', 5, 120); acertar(n, t.dano, false); break; } continue; }
     if (Math.hypot(t.x - eu.x, t.y - eu.y) < 20 && t.vida > 0) { t.vida = 0; ferir(t.dano); if (!rodando) return; }
   }
   tiros = tiros.filter(t => t.vida > 0);
@@ -475,14 +482,14 @@ function desenhar(rel) {
     if (n.tipo === 'drone' && n.raiva) { cx.fillStyle = 'rgba(255,77,77,.25)'; cx.beginPath(); cx.arc(n.x + Math.cos(n.ang) * 8, n.y + Math.sin(n.ang) * 8, 10, 0, 6.283); cx.fill(); }
     if (n.flash > 0) { cx.globalAlpha = n.flash / .12 * .55; cx.fillStyle = '#ffffff'; cx.beginPath(); cx.arc(n.x, n.y, R, 0, 6.283); cx.fill(); cx.globalAlpha = 1; }
     if (n.hp < n.max || n.raiva) { cx.fillStyle = 'rgba(12,20,36,.9)'; cx.fillRect(n.x - 22, n.y - R - 14, 44, 4); cx.fillStyle = '#ff7a45'; cx.fillRect(n.x - 22, n.y - R - 14, 44 * Math.max(0, n.hp / n.max), 4); }
-    if (n === alvo) {   // colchetes de mira girando: laranja = arremesso armado, verde-água = laser
+    if (n === alvo) {   // colchetes de mira girando: laranja = arremesso armado, verde-água = canhões
       cx.strokeStyle = querArremessar ? '#ff7a45' : '#4de2c5'; cx.lineWidth = 2.5;
       for (let i = 0; i < 4; i++) { const a = rel * 1.5 + i * 1.571; cx.beginPath(); cx.arc(n.x, n.y, R + 12, a, a + .7); cx.stroke(); } }
   }
   for (const t of tiros) {
-    if (t.laser) { cx.strokeStyle = t.cor; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(t.de.x, t.de.y); cx.lineTo(t.para.x, t.para.y); cx.stroke();
-      cx.strokeStyle = '#e9fffa'; cx.lineWidth = 1; cx.stroke(); continue; }
     if (!vis(t.x, t.y)) continue;
+    if (t.meu) { cx.strokeStyle = t.cor; cx.lineWidth = 4; cx.beginPath(); cx.moveTo(t.x, t.y); cx.lineTo(t.x - t.vx * .025, t.y - t.vy * .025); cx.stroke();
+      cx.strokeStyle = '#e9fffa'; cx.lineWidth = 1.5; cx.stroke(); continue; }
     cx.strokeStyle = t.cor; cx.lineWidth = 2.5; cx.beginPath(); cx.moveTo(t.x, t.y); cx.lineTo(t.x - t.vx * .035, t.y - t.vy * .035); cx.stroke();
     cx.fillStyle = '#ffffff'; cx.fillRect(t.x - 1.5, t.y - 1.5, 3, 3);
   }
