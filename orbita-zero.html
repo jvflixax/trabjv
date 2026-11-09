@@ -126,7 +126,27 @@ const TIPOS = {
   drone:   {nome: 'Drone Ferrugem', hp: 60,  vel: 90,  alc: 260, dano: 6,  cad: 1.6, raio: 18, tam: 44, cor: '#c9824f', sc: 14, xp: 8},
   vespa:   {nome: 'Vespa Ácida',    hp: 90,  vel: 170, alc: 300, dano: 9,  cad: 1.1, raio: 16, tam: 44, cor: '#b6f05a', sc: 24, xp: 14},
   colosso: {nome: 'Colosso Âmbar',  hp: 420, vel: 60,  alc: 380, dano: 22, cad: 2.2, raio: 34, tam: 84, cor: '#ffb347', sc: 80, xp: 45},
+  enxame:  {nome: 'Enxame de Limalha', hp: 25, vel: 150, alc: 200, dano: 3, cad: .8, raio: 9, tam: 26, cor: '#b8c2d6', sc: 5, xp: 3},
+  arraia:  {nome: 'Arraia de Gelo', hp: 140, vel: 120, alc: 320, dano: 7, cad: 1.4, raio: 20, tam: 56, cor: '#8fd8ff', sc: 30, xp: 20, gelo: true},
+  sentinela: {nome: 'Sentinela Partida', hp: 600, vel: 0, alc: 520, dano: 18, cad: 1.8, raio: 28, tam: 72, cor: '#a99cff', sc: 90, xp: 50},
+  rainha:  {nome: 'Rainha da Colmeia', hp: 2500, vel: 50, alc: 360, dano: 20, cad: 1.5, raio: 46, tam: 124, cor: '#e6ff7a', sc: 600, xp: 300},
 };
+for (const [k, d, s] of [['drone', .06, 1], ['vespa', .1, 1], ['colosso', .35, 2], ['enxame', .02, 1], ['arraia', .15, 1], ['sentinela', .4, 2], ['rainha', 1, 3]]) Object.assign(TIPOS[k], {drop: d, sorte: s});
+const PESOS = [['drone', .47], ['vespa', .25], ['colosso', .1], ['enxame', .05], ['arraia', .08], ['sentinela', .05]];
+function sortearTipo() { let x = Math.random(); for (const [k, w] of PESOS) if ((x -= w) < 0) return k; return 'drone'; }
+
+// ---- naves do piloto: canhões e motores na posição do desenho (frente = +x) ----
+const NAVES = {
+  sucata: {nome: 'Caça-sucata', preco: 0, tam: 56, casco: 1, esc: 1, vel: 1, amp: 1, desc: 'Inicial. Barata e remendada.',
+    canhoes: [[23, -6.3], [23, 6.3]], motores: [[-22, -10, 1], [-24, 10, 1.3]]},
+  faisca: {nome: 'Interceptora Faísca', preco: 2500, tam: 60, casco: .85, esc: 1, vel: 1.35, amp: 1, desc: 'Rápida, casco fino.',
+    canhoes: [[10, -11], [10, 11]], motores: [[-18, -4, 1.1], [-18, 4, 1.1]]},
+  ambar: {nome: 'Fragata Âmbar', preco: 6000, tam: 76, casco: 1.8, esc: 1.3, vel: .8, amp: 1, desc: 'Tanque lenta e blindada.',
+    canhoes: [[26, -6], [26, 6], [14, -19], [14, 19]], motores: [[-25, -10, 1.4], [-25, 10, 1.4]]},
+  vael: {nome: 'Cruzador de Vael', preco: 15000, tam: 92, casco: 2.4, esc: 1.8, vel: .95, amp: 1.5, desc: 'Topo de linha. Bônus dos equipamentos +50%.',
+    canhoes: [[38, -4], [38, 4], [16, -13], [16, 13], [-8, -30], [-8, 30]], motores: [[-35, -6, 1.5], [-35, 6, 1.5], [-26, -27, 1], [-26, 27, 1]]},
+};
+const NAVE = () => NAVES[S.nave] || NAVES.sucata, intervalo = () => .6 / NAVE().canhoes.length;
 let S, eu, inimigos, caixas, sucatas, tiros, part, ondas, textos, alvo;
 let auto = false, pausado = false, rodando = false, cam = {x: 0, y: 0, z: 1, tremor: 0};
 let agora = 0, toastT = 0, proxIni = 0, salvarT = 0, cheioT = 0, autoT = 0;
@@ -138,13 +158,13 @@ const UPS = [
   {k: 'porao',  nome: 'Porão',  desc: n => `Carga máxima ${porMax(n)}`, base: 55},
 ];
 const danoTiro = n => 8 + n * 3, escMax = n => 80 + n * 40, vel = n => 260 + n * 22, porMax = n => 150 + n * 100;
-const hpMax = () => 150 + (S.nivel - 1) * 25, custo = (u, n) => Math.round(u.base * Math.pow(1.6, n));
-const bonus = k => S.eq[k] ? S.eq[k].b : 0;
-const danoAtual = () => Math.round(danoTiro(S.up.canhao) * (1 + bonus('canhao'))), escAtual = () => Math.round(escMax(S.up.escudo) * (1 + bonus('escudo'))), velAtual = () => Math.round(vel(S.up.motor) * (1 + bonus('motor')));
+const hpMax = () => Math.round((150 + (S.nivel - 1) * 25) * NAVE().casco), custo = (u, n) => Math.round(u.base * Math.pow(1.6, n));
+const bonus = k => S.eq[k] ? S.eq[k].b * NAVE().amp : 0, bonusItem = it => it.b * NAVE().amp;
+const danoAtual = () => Math.round(danoTiro(S.up.canhao) * (1 + bonus('canhao'))), escAtual = () => Math.round(escMax(S.up.escudo) * NAVE().esc * (1 + bonus('escudo'))), velAtual = () => Math.round(vel(S.up.motor) * NAVE().vel * (1 + bonus('motor')));
 const livre = () => porMax(S.up.porao) - S.porao, fmt = n => Math.round(n).toLocaleString('pt-BR');
 
 // ---------- save (v2). v1 = protótipo com cristais: cristais viram sucata no banco, laser vira canhões ----------
-function novo() { return {v: 2, banco: 0, porao: 0, nivel: 1, xp: 0, abates: 0, setor: 1, up: {canhao: 0, ima: 0, escudo: 0, motor: 0, porao: 0}, perdida: null, inv: [], eq: {canhao: null, escudo: null, motor: null}}; }
+function novo() { return {v: 2, banco: 0, porao: 0, nivel: 1, xp: 0, abates: 0, setor: 1, up: {canhao: 0, ima: 0, escudo: 0, motor: 0, porao: 0}, perdida: null, nave: 'sucata', naves: ['sucata'], inv: [], eq: {canhao: null, escudo: null, motor: null}}; }
 function migrar(d) {
   if (!d || !d.up) return novo();
   if (d.v === 2) { const b = novo();   // v2 antigo: completa campos novos; sem canhões, o laser antigo tinha ido para o ímã
@@ -163,7 +183,7 @@ function sprite(tam, f) { const c = document.createElement('canvas'); c.width = 
 function poli(g, pts, cor, linha) { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath(); g.fillStyle = cor; g.fill(); if (linha) { g.strokeStyle = linha; g.lineWidth = 1.2; g.stroke(); } }
 function bola(g, x, y, r, cor) { g.beginPath(); g.arc(x, y, r, 0, 6.283); g.fillStyle = cor; g.fill(); }
 const SPR = {
-  nave: sprite(56, g => {   // caça-sucata: casco remendado, garras magnéticas laranja no bico
+  sucata: sprite(56, g => {   // caça-sucata: casco remendado, garras magnéticas laranja no bico
     g.fillStyle = '#5d6b85'; g.fillRect(-22, -14, 12, 8); g.fillRect(-24, 5, 14, 10);
     poli(g, [[22, 0], [8, -9], [-6, -12], [-16, -8], [-18, 0], [-16, 9], [-4, 13], [8, 8]], '#c9d3e6', '#24324d');
     poli(g, [[2, -9], [-8, -11], [-10, -4], [0, -4]], '#d9965a');
@@ -172,6 +192,61 @@ const SPR = {
     g.fillStyle = '#ff7a45'; g.fillRect(21, -8, 3, 3.4); g.fillRect(21, 4.6, 3, 3.4);
     g.beginPath(); g.ellipse(5, 0, 6, 3.6, 0, 0, 6.283); g.fillStyle = '#4de2c5'; g.fill(); bola(g, 7, -1.2, 1.4, '#e9fffa');
     for (const [x, y] of [[-12, -6], [-12, 6], [0, 9], [-2, -7]]) bola(g, x, y, .9, '#24324d');
+  }),
+  faisca: sprite(60, g => {  // interceptora: flecha fina branco-azulada, asas recuadas, faixas verde-água
+    g.fillStyle = '#5d6b85'; g.fillRect(-20, -6, 8, 4); g.fillRect(-20, 2, 8, 4);
+    poli(g, [[27, 0], [6, -5], [-6, -8], [-14, -20], [-10, -5], [-18, -3], [-18, 3], [-10, 5], [-14, 20], [-6, 8], [6, 5]], '#e4ecf7', '#24324d');
+    g.fillStyle = '#4de2c5'; g.fillRect(-10, -15, 9, 2); g.fillRect(-10, 13, 9, 2);
+    g.fillStyle = '#5d6b85'; g.fillRect(0, -12, 11, 2.6); g.fillRect(0, 9.4, 11, 2.6); g.fillStyle = '#ff7a45'; g.fillRect(9, -12, 2.5, 2.6); g.fillRect(9, 9.4, 2.5, 2.6);
+    g.beginPath(); g.ellipse(9, 0, 7, 2.6, 0, 0, 6.283); g.fillStyle = '#4de2c5'; g.fill(); bola(g, 11, -.8, 1.1, '#e9fffa');
+  }),
+  ambar: sprite(76, g => {   // fragata: casco largo blindado, placas âmbar, 4 canhões
+    g.fillStyle = '#5a3a1a'; g.fillRect(-28, -14, 8, 8); g.fillRect(-28, 6, 8, 8);
+    poli(g, [[24, 0], [16, -14], [6, -24], [-8, -26], [-24, -16], [-24, 16], [-8, 26], [6, 24], [16, 14]], '#d99a4e', '#5a3a1a');
+    poli(g, [[10, -10], [-14, -14], [-14, 14], [10, 10]], '#8a5a2a');
+    poli(g, [[4, -22], [-8, -24], [-10, -16], [2, -14]], '#f2c17d'); poli(g, [[4, 22], [-8, 24], [-10, 16], [2, 14]], '#f2c17d');
+    g.fillStyle = '#3d2a14'; for (const [x, y] of [[14, -7.5], [14, 4.5], [4, -20.5], [4, 17.5]]) g.fillRect(x, y, 12, 3);
+    g.fillStyle = '#ff7a45'; for (const [x, y] of [[25, -7.5], [25, 4.5], [15, -20.5], [15, 17.5]]) g.fillRect(x, y, 2.5, 3);
+    g.beginPath(); g.ellipse(4, 0, 6, 4, 0, 0, 6.283); g.fillStyle = '#4de2c5'; g.fill();
+    for (const [x, y] of [[-18, -10], [-18, 10], [-4, -18], [-4, 18]]) bola(g, x, y, 1.2, '#3d2a14');
+  }),
+  vael: sprite(92, g => {    // cruzador: casco escuro com frisos dourados, núcleo verde-água, 6 canhões
+    g.fillStyle = '#1c2438'; g.fillRect(-38, -9, 8, 6); g.fillRect(-38, 3, 8, 6); g.fillRect(-30, -31, 8, 6); g.fillRect(-30, 25, 8, 6);
+    poli(g, [[40, 0], [22, -9], [4, -13], [-10, -32], [-26, -30], [-20, -12], [-34, -9], [-34, 9], [-20, 12], [-26, 30], [-10, 32], [4, 13], [22, 9]], '#2a3550', '#ffd166');
+    poli(g, [[30, 0], [12, -6], [-22, -6], [-22, 6], [12, 6]], '#3a4870');
+    g.strokeStyle = '#ffd166'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(-8, -28); g.lineTo(4, -12); g.moveTo(-8, 28); g.lineTo(4, 12); g.stroke();
+    g.fillStyle = '#0f1626'; for (const [x, y] of [[26, -5.5], [26, 2.5], [6, -14.5], [6, 11.5], [-18, -31.5], [-18, 28.5]]) g.fillRect(x, y, 13, 3);
+    g.fillStyle = '#ff7a45'; for (const [x, y] of [[37, -5.5], [37, 2.5], [17, -14.5], [17, 11.5], [-7, -31.5], [-7, 28.5]]) g.fillRect(x, y, 2.5, 3);
+    bola(g, -6, 0, 7, 'rgba(77,226,197,.35)'); bola(g, -6, 0, 4, '#4de2c5'); bola(g, -5, -1, 1.4, '#e9fffa');
+    g.beginPath(); g.ellipse(18, 0, 6, 3, 0, 0, 6.283); g.fillStyle = '#ffd166'; g.fill();
+  }),
+  enxame: sprite(26, g => {  // três lascas de metal afiadas voando juntas
+    for (const [x, y, a] of [[4, 0, 0], [-4, -5, .5], [-4, 5, -.5]]) { g.save(); g.translate(x, y); g.rotate(a);
+      poli(g, [[6, 0], [-4, -3], [-2, 0], [-4, 3]], '#b8c2d6', '#4a5266'); g.fillStyle = '#eef3fb'; g.fillRect(-1, -1, 4, 1); g.restore(); }
+  }),
+  arraia: sprite(56, g => {  // arraia: asas largas azul-gelo, cauda fina, pintas de geada
+    g.strokeStyle = '#2a6f96'; g.lineWidth = 2; g.beginPath(); g.moveTo(-14, 0); g.lineTo(-27, 0); g.stroke();
+    poli(g, [[16, 0], [6, -6], [-2, -22], [-10, -8], [-16, 0], [-10, 8], [-2, 22], [6, 6]], '#8fd8ff', '#2a6f96');
+    poli(g, [[12, 0], [2, -4], [-10, 0], [2, 4]], '#cdeeff');
+    for (const [x, y] of [[-3, -13], [-3, 13], [-7, -6], [-7, 6]]) bola(g, x, y, 1.6, '#ffffff');
+    bola(g, 10, -3, 1.4, '#123a52'); bola(g, 10, 3, 1.4, '#123a52');
+  }),
+  sentinela: sprite(72, g => {   // satélite quebrado: painel solar de um lado, toco partido do outro, canhão longo
+    g.fillStyle = '#3a4466'; g.fillRect(-8, -34, 16, 22); g.strokeStyle = '#7f8fae'; g.lineWidth = 1;
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) g.strokeRect(-8 + j * 8, -34 + i * 7.3, 8, 7.3);
+    poli(g, [[-5, 12], [6, 12], [3, 18], [-2, 22], [-6, 17]], '#4a4466');
+    g.fillStyle = '#2a2640'; g.fillRect(10, -3, 22, 6); g.fillStyle = '#ff4d4d'; g.fillRect(30, -3, 3, 6);
+    poli(g, Array.from({length: 8}, (_, i) => [Math.cos(i * .785 + .39) * 15, Math.sin(i * .785 + .39) * 15]), '#6f6a8f', '#2a2640');
+    bola(g, 0, 0, 6, '#2a2640'); bola(g, 2, 0, 3.5, '#ff4d4d'); bola(g, 3, -1, 1, '#ffd0d0');
+  }),
+  rainha: sprite(124, g => {   // rainha: abdômen grande listrado, coroa de espinhos, mandíbulas
+    poli(g, [[-30, 0], [-58, -7], [-58, 7]], '#4a5a12');
+    g.beginPath(); g.ellipse(-22, 0, 30, 22, 0, 0, 6.283); g.fillStyle = '#c9e05a'; g.fill(); g.strokeStyle = '#4a5a12'; g.lineWidth = 2; g.stroke();
+    g.fillStyle = '#4a5a12'; for (const x of [-40, -28, -16]) g.fillRect(x, -20, 4, 40);
+    g.beginPath(); g.ellipse(10, 0, 16, 14, 0, 0, 6.283); g.fillStyle = '#e6ff7a'; g.fill(); g.stroke();
+    for (const a of [-1.2, -.6, 0, .6, 1.2]) poli(g, [[10 + Math.cos(a) * 13, Math.sin(a) * 13], [10 + Math.cos(a) * 24, Math.sin(a) * 24], [10 + Math.cos(a + .2) * 14, Math.sin(a + .2) * 14]], '#4a5a12');
+    poli(g, [[24, -6], [38, -10], [30, -2]], '#2a3306'); poli(g, [[24, 6], [38, 10], [30, 2]], '#2a3306');
+    bola(g, 18, -6, 3, '#1f2d06'); bola(g, 18, 6, 3, '#1f2d06'); bola(g, 19, -7, 1, '#ffffff'); bola(g, 19, 5, 1, '#ffffff');
   }),
   drone: sprite(44, g => {  // caixa enferrujada com lente vermelha
     g.fillStyle = '#5a3218'; g.fillRect(-10, -18, 6, 6); g.fillRect(-10, 12, 6, 6);
@@ -214,7 +289,7 @@ function novoItem(setor, sorte) {
   const r = Math.max(...Array.from({length: sorte}, () => sortearRar(setor))), slot = ['canhao', 'escudo', 'motor'][Math.floor(Math.random() * 3)], f = FAIXA[r];
   return {s: slot, r, b: Math.round(rnd(f[0], f[1]) * 100) / 100, nome: `${SLOT[slot].nome} ${SUFIXO[r][Math.floor(Math.random() * SUFIXO[r].length)]}`, valor: Math.round(VALOR_RAR[r] * (1 + (setor - 1) * .25))};
 }
-const descItem = it => `+${Math.round(it.b * 100)}% ${SLOT[it.s].efeito} · ${RAR[it.r]}`;
+const descItem = it => `+${Math.round(bonusItem(it) * 100)}% ${SLOT[it.s].efeito} · ${RAR[it.r]}`;
 
 // ---------- estado ----------
 function iniciar(dados) {
@@ -234,9 +309,12 @@ function lugar(longeDoca, longeEu) {
   do { x = rnd(200, W - 200); y = rnd(200, H - 200); } while (++i < 60 && (Math.hypot(x - DOCA.x, y - DOCA.y) < longeDoca || Math.hypot(x - eu.x, y - eu.y) < longeEu));
   return {x, y};
 }
-function gerarInimigo() {
-  const r = Math.random(), tipo = r < .55 ? 'drone' : r < .88 ? 'vespa' : 'colosso', t = TIPOS[tipo], f = 1 + (S.setor - 1) * 0.35, p = lugar(900, 800);
-  inimigos.push({tipo, t, x: p.x, y: p.y, hp: t.hp * f, max: t.hp * f, f, wx: p.x, wy: p.y, ang: rnd(0, 6.28), raiva: false, ult: 0, morto: false, flash: 0});
+function gerarInimigo(tipo = sortearTipo(), p = lugar(900, 800)) {
+  if (tipo === 'drone' && S.setor >= 2 && !inimigos.some(n => n.tipo === 'rainha') && Math.random() < .03) { tipo = 'rainha'; if (rodando) toast('Uma Rainha da Colmeia apareceu no setor!', 3.5); }
+  const t = TIPOS[tipo], f = 1 + (S.setor - 1) * 0.35, n = {tipo, t, x: p.x, y: p.y, hp: t.hp * f, max: t.hp * f, f, wx: p.x, wy: p.y, ang: rnd(0, 6.28), raiva: false, ult: 0, morto: false, flash: 0};
+  inimigos.push(n);
+  if (tipo === 'enxame' && !p.grupo) for (let i = 0; i < 4; i++) gerarInimigo('enxame', {x: p.x + rnd(-60, 60), y: p.y + rnd(-60, 60), grupo: true});
+  return n;
 }
 
 // ---------- efeitos ----------
@@ -281,11 +359,11 @@ function morrer() {
 }
 function matar(n) {
   n.morto = true; if (alvo === n) alvo = null;
-  const grande = n.tipo === 'colosso';
+  const grande = n.t.raio >= 28;
   explodir(n.x, n.y, n.t.cor, grande ? 60 : 28, grande ? 320 : 220); explodir(n.x, n.y, '#fff1a8', 10, 120); onda(n.x, n.y, grande ? 130 : 75, n.t.cor); tremer(grande ? 10 : 4);
   const total = Math.round(n.t.sc * n.f), k = grande ? 6 : 3;
   for (let i = 0; i < k; i++) { const a = rnd(0, 6.28), s = rnd(60, 160); sucatas.push({x: n.x, y: n.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, v: Math.max(1, Math.round(total / k)), fase: rnd(0, 6)}); }
-  if (Math.random() < {drone: .06, vespa: .1, colosso: .35}[n.tipo] && caixas.length < 30) caixas.push({x: n.x, y: n.y, it: novoItem(S.setor, grande ? 2 : 1), fase: 0});
+  if (Math.random() < n.t.drop && caixas.length < 30) caixas.push({x: n.x, y: n.y, it: novoItem(S.setor, n.t.sorte), fase: 0});
   contarAbate(n.t.xp, 1);
   salvar();
 }
@@ -318,19 +396,27 @@ $('bJogar').onclick = () => { $('pIni').hidden = true; rodando = true; toast('To
 $('bRep').onclick = () => { $('pMorte').hidden = true; Object.assign(eu, {x: DOCA.x, y: DOCA.y, dx: DOCA.x, dy: DOCA.y, hp: hpMax(), esc: escAtual()}); alvo = null; rodando = true; hud(); };
 document.addEventListener('visibilitychange', () => { if (!document.hidden) return; salvar(); if (rodando && !pausado) abrir('pPausa'); });
 function montarOficina() {
-  $('ups').innerHTML = UPS.map(u => { const n = S.up[u.k], c = custo(u, n);
+  const naDoca = dist(eu, DOCA) < RDOCA;
+  $('ups').innerHTML = `<h3>Naves</h3>` + Object.entries(NAVES).map(([k, nv]) => {
+      const tem = S.naves.includes(k), uso = S.nave === k;
+      const bt = uso ? '<button disabled>Em uso</button>' : tem ? `<button data-usar="${k}" ${naDoca ? '' : 'disabled'}>Usar</button>` : `<button data-comprar="${k}" ${S.banco < nv.preco ? 'disabled' : ''}>${fmt(nv.preco)} ▣</button>`;
+      return `<div class="item"><b>${nv.nome}</b><small>${nv.desc} ${nv.canhoes.length} canhões · casco ×${nv.casco} · escudo ×${nv.esc} · vel. ×${nv.vel}</small><div class="acoes">${bt}</div></div>`; }).join('')
+    + (naDoca ? '' : '<p class="dica">A troca de nave só pode ser feita dentro da Doca.</p>')
+    + `<h3>Melhorias</h3>` + UPS.map(u => { const n = S.up[u.k], c = custo(u, n);
     return `<div class="up"><b>${u.nome} · nv ${n}</b><small>${u.desc(n)} → ${u.desc(n + 1).split(' ').pop()}</small><button data-k="${u.k}" ${S.banco < c ? 'disabled' : ''}>${fmt(c)} ▣</button></div>`; }).join('')
     + `<p class="dica">No banco: ${fmt(S.banco)} ▣. A sucata do porão só conta depois de entregue na Doca. O piloto automático caça o inimigo mais próximo, recolhe caixas e volta à Doca com o porão cheio ou o casco fraco.</p>`
     + `<h3>Equipado</h3>` + Object.keys(SLOT).map(k => { const it = S.eq[k];
       return `<div class="item"><b class="${it ? 'r' + it.r : ''}">${it ? it.nome : SLOT[k].nome + ': vazio'}</b><small>${it ? descItem(it) : 'Derrube inimigos para achar um'}</small></div>`; }).join('')
     + `<h3>Hangar ${S.inv.length}/20</h3>` + (S.inv.length ? S.inv.map((it, i) =>
-      `<div class="item"><b class="r${it.r}">${it.nome}</b><small>${descItem(it)}${it.b > bonus(it.s) ? ' <span class="melhor">▲ melhor</span>' : ''}</small>`
+      `<div class="item"><b class="r${it.r}">${it.nome}</b><small>${descItem(it)}${bonusItem(it) > bonus(it.s) ? ' <span class="melhor">▲ melhor</span>' : ''}</small>`
       + `<div class="acoes"><button data-eq="${i}">Equipar</button><button data-des="${i}">${fmt(it.valor)} ▣</button></div></div>`).join('')
       : '<p class="dica">Vazio. Itens caem dos inimigos em caixas brilhantes: cinza comum, azul raro, roxo épico, dourado lendário. O botão com ▣ desmonta o item e vende a sucata.</p>');
 }
 $('ups').onclick = e => { const ds = e.target.dataset || {};
   if (ds.eq != null) { const it = S.inv.splice(+ds.eq, 1)[0]; if (S.eq[it.s]) S.inv.splice(+ds.eq, 0, S.eq[it.s]); S.eq[it.s] = it; eu.esc = Math.min(eu.esc, escAtual()); salvar(); montarOficina(); hud(); return; }
   if (ds.des != null) { const it = S.inv.splice(+ds.des, 1)[0]; S.banco += it.valor; salvar(); montarOficina(); hud(); return; }
+  if (ds.comprar) { const nv = NAVES[ds.comprar]; if (S.banco < nv.preco) return; S.banco -= nv.preco; S.naves.push(ds.comprar); toast(`${nv.nome} comprada: toque em Usar na Doca`); salvar(); montarOficina(); hud(); return; }
+  if (ds.usar && dist(eu, DOCA) < RDOCA) { S.nave = ds.usar; eu.hp = hpMax(); eu.esc = escAtual(); eu.lado = 0; salvar(); montarOficina(); hud(); return; }
   const k = ds.k; if (!k) return; const u = UPS.find(x => x.k === k), c = custo(u, S.up[k]);
   if (S.banco < c) return; S.banco -= c; S.up[k]++; if (k === 'escudo') eu.esc = escAtual(); salvar(); montarOficina(); hud(); };
 
@@ -348,13 +434,13 @@ function pilotoAuto() {
 // ---------- patrulha: luta por menu a partir da Doca ----------
 const pat = {setor: 0, enc: null, t: 0};
 function procurar(limpar = true) {
-  const r = Math.random(), tipo = r < .55 ? 'drone' : r < .88 ? 'vespa' : 'colosso', t = TIPOS[tipo], lider = Math.random() < .1, f = 1 + (pat.setor - 1) * .35;
-  const qtd = lider ? 1 : 1 + Math.floor(Math.random() * {drone: 4, vespa: 3, colosso: 2}[tipo]), m = lider ? 2.5 : 1;
+  const tipo = pat.setor >= 2 && Math.random() < .03 ? 'rainha' : sortearTipo(), t = TIPOS[tipo], lider = tipo !== 'rainha' && Math.random() < .1, f = 1 + (pat.setor - 1) * .35;
+  const qtd = lider ? 1 : tipo === 'enxame' ? 4 + Math.floor(Math.random() * 3) : 1 + Math.floor(Math.random() * {drone: 4, vespa: 3, colosso: 2, arraia: 2, sentinela: 1, rainha: 1}[tipo]), m = lider ? 2.5 : 1;
   pat.enc = {tipo, t, lider, qtd, hp: Math.round(t.hp * f * m), dano: Math.round(t.dano * f * m), dps: t.dano * f * m / t.cad, sc: Math.round(t.sc * f * (lider ? 4 : 1)), xp: Math.round(t.xp * (lider ? 4 : 1))};
   mostrarPat(); if (limpar) $('patRes').textContent = '';
 }
 function simular(e, sorte) {   // abate um por vez; quem está vivo continua atirando
-  const dps = danoAtual() / .3 * sorte; let tempo = 0, dano = 0;
+  const dps = danoAtual() / intervalo() * sorte; let tempo = 0, dano = 0;
   for (let i = 0; i < e.qtd; i++) { const ti = e.hp / dps; dano += e.dps * (e.qtd - i) * ti; tempo += ti; }
   return {tempo, dano};
 }
@@ -364,7 +450,7 @@ function mostrarPat() {
   $('patMenos').disabled = pat.setor <= 1; $('patMais').disabled = pat.setor >= S.setor;
   const e = pat.enc, g = $('patImg').getContext('2d'); g.clearRect(0, 0, 192, 192); $('patLuta').disabled = !e;
   if (!e) { $('patTx').innerHTML = '<small>Nenhum inimigo no radar. Toque em Procurar inimigo.</small>'; return; }
-  g.save(); g.translate(96, 96); g.rotate(-1.571); const tam = e.t.tam * 3.2 * (e.lider ? 1.15 : 1); g.drawImage(SPR[e.tipo], -tam / 2, -tam / 2, tam, tam); g.restore();
+  g.save(); g.translate(96, 96); g.rotate(-1.571); const tam = 150 * Math.max(.6, Math.min(1, e.t.tam / 60)); g.drawImage(SPR[e.tipo], -tam / 2, -tam / 2, tam, tam); g.restore();
   const [rt, rc] = risco(e);
   $('patTx').innerHTML = `<b class="${e.lider ? 'r3' : ''}">${e.t.nome}${e.lider ? ' (Líder)' : ''} ×${e.qtd}</b>`
     + `<small>Casco ${fmt(e.hp)} cada · Dano ${fmt(e.dano)} por tiro<br>Recompensa ${fmt(e.sc * e.qtd)} ▣ · ${fmt(e.xp * e.qtd)} xp<br>Risco: <span class="res ${rc}">${rt}</span></small>`;
@@ -380,8 +466,8 @@ function lutar() {
     eu.esc -= absorve; eu.hp -= r.dano - absorve;
     const sc = e.sc * e.qtd; S.banco += sc;
     let item = '';
-    for (let i = 0; i < e.qtd; i++) if (Math.random() < {drone: .06, vespa: .1, colosso: .35}[e.tipo] * (e.lider ? 3 : 1)) {
-      const it = novoItem(pat.setor, e.tipo === 'colosso' || e.lider ? 2 : 1);
+    for (let i = 0; i < e.qtd; i++) if (Math.random() < e.t.drop * (e.lider ? 3 : 1)) {
+      const it = novoItem(pat.setor, Math.max(e.t.sorte, e.lider ? 2 : 1));
       if (S.inv.length < 20) { S.inv.unshift(it); item += `<br>Item: <b class="r${it.r}">${it.nome}</b> (${RAR[it.r]})`; } else item += '<br>Um item caiu, mas o hangar está cheio.';
     }
     contarAbate(e.xp * e.qtd, e.qtd);
@@ -414,11 +500,11 @@ function passo(dt) {
   if (alvo && alvo.morto) alvo = null;
   if (alvo && dist(alvo, eu) > ALC_TIRO - 40) {   // mira travada: a nave persegue o alvo até ficar no alcance dos canhões
     const a = Math.atan2(eu.y - alvo.y, eu.x - alvo.x); eu.dx = limX(alvo.x + Math.cos(a) * (ALC_TIRO - 80)); eu.dy = limY(alvo.y + Math.sin(a) * (ALC_TIRO - 80)); }
-  const v = velAtual();
+  eu.lento = Math.max(0, (eu.lento || 0) - dt); const v = velAtual() * (eu.lento > 0 ? .6 : 1);   // tiro da Arraia de Gelo deixa a nave lenta
 
-  if (alvo && dist(alvo, eu) < ALC_TIRO && agora - eu.ultTiro > .3) {   // projéteis saem alternando dos dois canhões
-    eu.ultTiro = agora; eu.lado = -(eu.lado || 1);
-    const c = Math.cos(eu.ang), s = Math.sin(eu.ang), bx = eu.x + c * 22 - s * 6.3 * eu.lado, by = eu.y + s * 22 + c * 6.3 * eu.lado, a = Math.atan2(alvo.y - by, alvo.x - bx);
+  if (alvo && dist(alvo, eu) < ALC_TIRO && agora - eu.ultTiro > intervalo()) {   // projéteis saem um canhão por vez, em rodízio
+    eu.ultTiro = agora; const cs = NAVE().canhoes; eu.lado = ((eu.lado | 0) + 1) % cs.length; const [ox, oy] = cs[eu.lado];
+    const c = Math.cos(eu.ang), s = Math.sin(eu.ang), bx = eu.x + c * ox - s * oy, by = eu.y + s * ox + c * oy, a = Math.atan2(alvo.y - by, alvo.x - bx);
     tiros.push({x: bx, y: by, vx: Math.cos(a) * 950, vy: Math.sin(a) * 950, vida: .7, meu: true, alvo, dano: danoAtual(), cor: '#4de2c5'});
     explodir(bx, by, '#e9fffa', 3, 70);
   }
@@ -440,12 +526,14 @@ function passo(dt) {
   for (const n of inimigos) {
     n.flash = Math.max(0, n.flash - dt);
     const d = dist(n, eu);
-    if (d < 380) n.raiva = true;
+    if (d < Math.max(380, n.t.alc)) n.raiva = true;
+    if (n.tipo === 'rainha' && n.raiva && agora - (n.cria || 0) > 6 && inimigos.filter(m => m.mae === n && !m.morto).length < 4) {
+      n.cria = agora; const v = gerarInimigo('vespa', {x: n.x + rnd(-40, 40), y: n.y + rnd(-40, 40)}); v.mae = n; v.raiva = true; onda(n.x, n.y, 60, '#e6ff7a'); }
     let gx = n.wx, gy = n.wy, olha = null;
     if (n.raiva && dist(eu, DOCA) > RDOCA + 60) { const a = Math.atan2(n.y - eu.y, n.x - eu.x); gx = eu.x + Math.cos(a) * n.t.alc * .8; gy = eu.y + Math.sin(a) * n.t.alc * .8;
       olha = Math.atan2(eu.y - n.y, eu.x - n.x);
       if (d < n.t.alc && agora - n.ult > n.t.cad) { n.ult = agora;
-        tiros.push({x: n.x, y: n.y, vx: Math.cos(olha) * 420, vy: Math.sin(olha) * 420, vida: 1.1, dano: n.t.dano * n.f, cor: n.t.cor}); } }
+        tiros.push({x: n.x, y: n.y, vx: Math.cos(olha) * 420, vy: Math.sin(olha) * 420, vida: 1.3, dano: n.t.dano * n.f, cor: n.t.cor, gelo: n.t.gelo}); } }
     else if (Math.hypot(n.wx - n.x, n.wy - n.y) < 20) { n.wx = Math.max(100, Math.min(W - 100, n.x + rnd(-500, 500))); n.wy = Math.max(100, Math.min(H - 100, n.y + rnd(-500, 500))); }
     if (n.raiva && d > 1400) n.raiva = false;
     const mx2 = gx - n.x, my2 = gy - n.y, md = Math.hypot(mx2, my2);
@@ -456,7 +544,7 @@ function passo(dt) {
     t.vida -= dt; t.x += t.vx * dt; t.y += t.vy * dt;
     if (t.meu && !t.alvo.morto) { const a = Math.atan2(t.alvo.y - t.y, t.alvo.x - t.x); t.vx = Math.cos(a) * 950; t.vy = Math.sin(a) * 950; }   // tiro guiado: o alvo se mexe durante o voo
     if (t.meu) { for (const n of inimigos) if (!n.morto && Math.hypot(n.x - t.x, n.y - t.y) < n.t.raio + 4) { t.vida = 0; explodir(t.x, t.y, '#4de2c5', 5, 120); acertar(n, t.dano, false); break; } continue; }
-    if (Math.hypot(t.x - eu.x, t.y - eu.y) < 20 && t.vida > 0) { t.vida = 0; ferir(t.dano); if (!rodando) return; }
+    if (Math.hypot(t.x - eu.x, t.y - eu.y) < NAVE().tam * .36 && t.vida > 0) { t.vida = 0; if (t.gelo) { if (!(eu.lento > 0)) texto(eu.x, eu.y - 30, 'LENTO', '#8fd8ff', false); eu.lento = 2; } ferir(t.dano); if (!rodando) return; }
   }
   tiros = tiros.filter(t => t.vida > 0);
 
@@ -541,6 +629,7 @@ function desenhar(rel) {
     pintar(SPR[n.tipo], n.x, n.y, n.ang, n.t.tam);
     if (n.tipo === 'colosso') { const pu = 1 + Math.sin(rel * 4 + n.wx) * .25; cx.fillStyle = 'rgba(255,241,168,.25)'; cx.beginPath(); cx.arc(n.x, n.y, 13 * pu, 0, 6.283); cx.fill();
       cx.fillStyle = '#fff1a8'; cx.beginPath(); cx.arc(n.x, n.y, 6 * pu, 0, 6.283); cx.fill(); }
+    if (n.tipo === 'rainha') { const pu = .5 + .5 * Math.sin(rel * 3); cx.fillStyle = `rgba(230,255,122,${.15 + pu * .2})`; cx.beginPath(); cx.arc(n.x - Math.cos(n.ang) * 25, n.y - Math.sin(n.ang) * 25, 28, 0, 6.283); cx.fill(); }
     if (n.tipo === 'drone' && n.raiva) { cx.fillStyle = 'rgba(255,77,77,.25)'; cx.beginPath(); cx.arc(n.x + Math.cos(n.ang) * 8, n.y + Math.sin(n.ang) * 8, 10, 0, 6.283); cx.fill(); }
     if (n.flash > 0) { cx.globalAlpha = n.flash / .12 * .55; cx.fillStyle = '#ffffff'; cx.beginPath(); cx.arc(n.x, n.y, R, 0, 6.283); cx.fill(); cx.globalAlpha = 1; }
     if (n.hp < n.max || n.raiva) { cx.fillStyle = 'rgba(12,20,36,.9)'; cx.fillRect(n.x - 22, n.y - R - 14, 44, 4); cx.fillStyle = '#ff7a45'; cx.fillRect(n.x - 22, n.y - R - 14, 44 * Math.max(0, n.hp / n.max), 4); }
@@ -559,12 +648,13 @@ function desenhar(rel) {
   if (rodando || !$('pIni').hidden) {
     cx.save(); cx.translate(eu.x, eu.y); cx.rotate(eu.ang);
     const sp = Math.min(1, Math.hypot(eu.vx, eu.vy) / velAtual()), fl = 4 + sp * 14 + Math.random() * 4;
-    for (const [x, y, s] of [[-22, -10, 1], [-24, 10, 1.3]]) {
+    for (const [x, y, s] of NAVE().motores) {
       cx.fillStyle = 'rgba(77,226,197,.75)'; cx.beginPath(); cx.moveTo(x, y - 3 * s); cx.lineTo(x - fl * s, y); cx.lineTo(x, y + 3 * s); cx.fill();
       cx.fillStyle = '#e9fffa'; cx.beginPath(); cx.moveTo(x, y - 1.4 * s); cx.lineTo(x - fl * s * .45, y); cx.lineTo(x, y + 1.4 * s); cx.fill(); }
-    cx.drawImage(SPR.nave, -28, -28, 56, 56);
+    const T = NAVE().tam; cx.drawImage(SPR[S.nave], -T / 2, -T / 2, T, T);
+    if (eu.lento > 0) { cx.strokeStyle = 'rgba(143,216,255,.7)'; cx.lineWidth = 3; cx.setLineDash([3, 4]); cx.beginPath(); cx.arc(0, 0, T * .5, 0, 6.283); cx.stroke(); cx.setLineDash([]); }
     if (eu.esc > 0 || eu.flash > 0) { const em = escAtual();
-      cx.strokeStyle = `rgba(90,168,255,${Math.min(1, .12 + .3 * eu.esc / em + eu.flash * 2.5)})`; cx.lineWidth = 2 + eu.flash * 8; cx.beginPath(); cx.arc(0, 0, 31, 0, 6.283); cx.stroke();
+      cx.strokeStyle = `rgba(90,168,255,${Math.min(1, .12 + .3 * eu.esc / em + eu.flash * 2.5)})`; cx.lineWidth = 2 + eu.flash * 8; cx.beginPath(); cx.arc(0, 0, T * .56, 0, 6.283); cx.stroke();
       if (eu.flash > 0) { cx.fillStyle = `rgba(90,168,255,${eu.flash * .5})`; cx.fill(); } }
     cx.restore();
   }
@@ -579,7 +669,7 @@ function desenhar(rel) {
   mx.strokeStyle = 'rgba(77,226,197,.7)'; mx.lineWidth = 2; mx.beginPath(); mx.arc(DOCA.x * k, DOCA.y * k, 7, 0, 6.283); mx.stroke();
   mx.fillStyle = '#ffd166'; for (const c of sucatas) mx.fillRect(c.x * k - 1.5, c.y * k - 1.5, 3, 3);
   for (const c of caixas) { mx.fillStyle = COR_RAR[c.it.r]; mx.fillRect(c.x * k - 3, c.y * k - 3, 6, 6); }
-  for (const n of inimigos) { mx.fillStyle = n.raiva ? '#ff7a45' : '#7f8fae'; mx.fillRect(n.x * k - 2, n.y * k - 2, 4, 4); }
+  for (const n of inimigos) { const q = n.tipo === 'rainha' ? 4 : 2; mx.fillStyle = n.tipo === 'rainha' ? '#e6ff7a' : n.raiva ? '#ff7a45' : '#7f8fae'; mx.fillRect(n.x * k - q, n.y * k - q, q * 2, q * 2); }
   if (pd && rel % 1 < .6) { mx.fillStyle = '#ff7a45'; mx.fillRect(pd.x * k - 4, pd.y * k - 4, 8, 8); }
   mx.fillStyle = '#4de2c5'; mx.beginPath(); mx.arc(eu.x * k, eu.y * k, 4, 0, 6.283); mx.fill();
   mx.strokeStyle = 'rgba(223,232,247,.35)'; mx.lineWidth = 1; mx.strokeRect((cam.x - w / 2 / cam.z) * k, (cam.y - h / 2 / cam.z) * k, w / cam.z * k, h / cam.z * k);
