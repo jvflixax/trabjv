@@ -69,7 +69,6 @@ button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px va
     <h2>Órbita Zero</h2>
     <p>Você pilota uma caça-sucata no Cinturão de Vael. Derrube drones com os canhões, junte sucata e melhore a nave na oficina.</p>
     <div class="dica"><b>Toque no espaço</b> para voar. <b>Toque num inimigo</b> para travar a mira: os canhões da nave atiram sozinhos enquanto ele estiver no alcance. Continue se mexendo para desviar dos tiros.</div>
-    <div class="dica"><b>Golpe extra:</b> toque numa rocha cinza para agarrar com o ímã e depois num inimigo para arremessar. Quanto mais a rocha balança, mais forte o golpe.</div>
     <div class="dica">Inimigos derrubados soltam <b>sucata ▣</b>. Ela vai para o porão e só vira dinheiro quando você <b>entrega na Doca Vael</b>. Se a nave cair, a carga fica flutuando no lugar: volte para buscar.</div>
     <div class="dica"><b>Equipamentos:</b> inimigos às vezes soltam caixas brilhantes com canhões, geradores de escudo e propulsores. Equipe na Oficina. Quanto mais forte o setor, mais itens raros.</div>
     <button id="bJogar">Decolar</button>
@@ -101,25 +100,24 @@ button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px va
 (() => {
 const cv = document.getElementById('cv'), cx = cv.getContext('2d'), mini = document.getElementById('mini'), mx = mini.getContext('2d');
 const $ = id => document.getElementById(id);
-const W = 5200, H = 3400, DOCA = {x: 600, y: 600}, RDOCA = 170, ALC_IMA = 210, ALC_LANCE = 600, ALC_TIRO = 380;
+const W = 5200, H = 3400, DOCA = {x: 600, y: 600}, RDOCA = 170, ALC_TIRO = 380;
 const calmo = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TIPOS = {
   drone:   {nome: 'Drone Ferrugem', hp: 60,  vel: 90,  alc: 260, dano: 6,  cad: 1.6, raio: 18, tam: 44, cor: '#c9824f', sc: 14, xp: 8},
   vespa:   {nome: 'Vespa Ácida',    hp: 90,  vel: 170, alc: 300, dano: 9,  cad: 1.1, raio: 16, tam: 44, cor: '#b6f05a', sc: 24, xp: 14},
   colosso: {nome: 'Colosso Âmbar',  hp: 420, vel: 60,  alc: 380, dano: 22, cad: 2.2, raio: 34, tam: 84, cor: '#ffb347', sc: 80, xp: 45},
 };
-let S, eu, inimigos, caixas, pedras, sucatas, tiros, part, ondas, textos, alvo, preso, querPegar, querArremessar;
+let S, eu, inimigos, caixas, sucatas, tiros, part, ondas, textos, alvo;
 let auto = false, pausado = false, rodando = false, cam = {x: 0, y: 0, z: 1, tremor: 0};
-let agora = 0, toastT = 0, proxIni = 0, proxPedra = 0, salvarT = 0, cheioT = 0, autoT = 0;
+let agora = 0, toastT = 0, proxIni = 0, salvarT = 0, cheioT = 0, autoT = 0;
 
 const UPS = [
   {k: 'canhao', nome: 'Canhões', desc: n => `Dano por tiro ${danoTiro(n)}`, base: 60},
-  {k: 'ima',    nome: 'Ímã',    desc: n => `Dano do arremesso ${danoIma(n)}`, base: 65},
   {k: 'escudo', nome: 'Escudo', desc: n => `Escudo máximo ${escMax(n)}`, base: 50},
   {k: 'motor',  nome: 'Motor',  desc: n => `Velocidade ${vel(n)}`, base: 70},
   {k: 'porao',  nome: 'Porão',  desc: n => `Carga máxima ${porMax(n)}`, base: 55},
 ];
-const danoTiro = n => 8 + n * 3, danoIma = n => 50 + n * 15, escMax = n => 80 + n * 40, vel = n => 260 + n * 22, porMax = n => 150 + n * 100;
+const danoTiro = n => 8 + n * 3, escMax = n => 80 + n * 40, vel = n => 260 + n * 22, porMax = n => 150 + n * 100;
 const hpMax = () => 150 + (S.nivel - 1) * 25, custo = (u, n) => Math.round(u.base * Math.pow(1.6, n));
 const bonus = k => S.eq[k] ? S.eq[k].b : 0;
 const danoAtual = () => Math.round(danoTiro(S.up.canhao) * (1 + bonus('canhao'))), escAtual = () => Math.round(escMax(S.up.escudo) * (1 + bonus('escudo'))), velAtual = () => Math.round(vel(S.up.motor) * (1 + bonus('motor')));
@@ -130,7 +128,9 @@ function novo() { return {v: 2, banco: 0, porao: 0, nivel: 1, xp: 0, abates: 0, 
 function migrar(d) {
   if (!d || !d.up) return novo();
   if (d.v === 2) { const b = novo();   // v2 antigo: completa campos novos; sem canhões, o laser antigo tinha ido para o ímã
-    return {...b, ...d, up: {...b.up, canhao: d.up.ima, ...d.up}, eq: {...b.eq, ...d.eq}, inv: d.inv || []}; }
+    const u = {...b.up, canhao: d.up.ima, ...d.up}, devolve = d.up.canhao != null && d.up.ima ? Array.from({length: d.up.ima}, (_, i) => Math.round(65 * Math.pow(1.6, i))).reduce((x, y) => x + y) : 0;
+    if (d.up.canhao != null) u.ima = 0;   // o Ímã saiu do jogo: devolve a sucata gasta nele
+    return {...b, ...d, banco: (d.banco || 0) + devolve, up: u, eq: {...b.eq, ...d.eq}, inv: d.inv || []}; }
   const u = d.up;
   return {...novo(), banco: d.cr || 0, nivel: d.nivel || 1, xp: d.xp || 0, abates: d.abates || 0, setor: d.setor || 1,
     up: {canhao: u.laser || 0, ima: 0, escudo: u.escudo || 0, motor: u.motor || 0, porao: 0}};
@@ -176,14 +176,6 @@ const SPR = {
     poli(g, hex(12), '#5a2f08');
   }),
   porca: sprite(16, g => { poli(g, Array.from({length: 6}, (_, i) => [Math.cos(i * 1.047) * 6, Math.sin(i * 1.047) * 6]), '#ffd166', '#8a5a00'); bola(g, 0, 0, 2.2, '#0c1424'); }),
-  pedras: Array.from({length: 5}, (_, k) => sprite(40, g => {
-    let s = k * 97 + 13; const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;
-    const pts = Array.from({length: 9}, (_, i) => { const a = i / 9 * 6.283, d = 12 + r() * 5; return [Math.cos(a) * d, Math.sin(a) * d]; });
-    poli(g, pts, k % 2 ? '#5b6170' : '#6e665c', '#2c3040');
-    poli(g, pts.slice(4, 8).map(([x, y]) => [x * .6 - 2, y * .6 - 2]).concat([[-2, -2]]), k % 2 ? '#737a8a' : '#877d70');
-    for (let i = 0; i < 3; i++) bola(g, r() * 14 - 7, r() * 14 - 7, 1.2 + r() * 2, 'rgba(20,24,34,.55)');
-    if (k >= 3) { g.save(); g.rotate(r() * 3); g.fillStyle = '#8a9bb8'; g.fillRect(-4, -9, 9, 6); g.fillStyle = '#ff7a45'; g.fillRect(-4, -9, 2, 6); g.restore(); }  // destroço com placa metálica
-  })),
 };
 const PLANETA = sprite(700, g => {
   const gr = g.createRadialGradient(-90, -110, 40, 0, 0, 260); gr.addColorStop(0, '#24406a'); gr.addColorStop(.7, '#121f38'); gr.addColorStop(1, '#0a1222');
@@ -207,12 +199,10 @@ const descItem = it => `+${Math.round(it.b * 100)}% ${SLOT[it.s].efeito} · ${RA
 // ---------- estado ----------
 function iniciar(dados) {
   S = dados && dados.up ? migrar(dados) : carregar();
-  inimigos = []; caixas = []; pedras = []; sucatas = []; tiros = []; part = []; ondas = []; textos = [];
-  alvo = preso = querPegar = null; querArremessar = false;
-  eu = {x: DOCA.x, y: DOCA.y, dx: DOCA.x, dy: DOCA.y, ang: 0, vx: 0, vy: 0, hp: hpMax(), esc: escAtual(), ultHit: -99, ultTiro: 0, flash: 0, feixe: 0};
+  inimigos = []; caixas = []; sucatas = []; tiros = []; part = []; ondas = []; textos = [];
+  alvo = null;
+  eu = {x: DOCA.x, y: DOCA.y, dx: DOCA.x, dy: DOCA.y, ang: 0, vx: 0, vy: 0, hp: hpMax(), esc: escAtual(), ultHit: -99, ultTiro: 0, flash: 0};
   for (let i = 0; i < 26; i++) gerarInimigo();
-  for (let i = 0; i < 55; i++) { const p = lugar(RDOCA, 0); gerarPedra(p.x, p.y); }
-  for (let i = 0; i < 6; i++) gerarPedra(DOCA.x + rnd(-380, 380), DOCA.y + rnd(220, 420));   // munição perto da Doca para começar
   cam.x = eu.x; cam.y = eu.y; hud();
 }
 function rnd(a, b) { return a + Math.random() * (b - a); }
@@ -228,7 +218,6 @@ function gerarInimigo() {
   const r = Math.random(), tipo = r < .55 ? 'drone' : r < .88 ? 'vespa' : 'colosso', t = TIPOS[tipo], f = 1 + (S.setor - 1) * 0.35, p = lugar(900, 800);
   inimigos.push({tipo, t, x: p.x, y: p.y, hp: t.hp * f, max: t.hp * f, f, wx: p.x, wy: p.y, ang: rnd(0, 6.28), raiva: false, ult: 0, morto: false, flash: 0});
 }
-function gerarPedra(x, y) { pedras.push({x, y, vx: rnd(-10, 10), vy: rnd(-10, 10), ang: rnd(0, 6.28), rot: rnd(-.6, .6), v: pedras.length % 5, r: rnd(13, 18), estado: 'solto', carga: .6, vida: 0, alvo: null}); }
 
 // ---------- efeitos ----------
 function toast(t, dur = 2.4) { $('toast').textContent = t; toastT = dur; }
@@ -259,16 +248,8 @@ function ferir(qtd) {
   if (qtd - e > 0) { tremer(5); explodir(eu.x, eu.y, '#ff7a45', 8, 160); }
   if (eu.hp <= 0) morrer();
 }
-const forca = p => p.carga;
-function lancar() {
-  const p = preso, f = forca(p), a = Math.atan2(alvo.y - p.y, alvo.x - p.x), s = 700 + 300 * (f - .6);
-  p.estado = 'voando'; p.vx = Math.cos(a) * s; p.vy = Math.sin(a) * s; p.alvo = alvo; p.forca = f; p.vida = 1.4;
-  preso = null; querArremessar = false; onda(p.x, p.y, 30, '#ff7a45');
-}
-function quebrar(p) { p.quebrou = true; explodir(p.x, p.y, '#9aa3b5', 16); onda(p.x, p.y, 50, '#dfe8f7'); tremer(3); }
 function morrer() {
   rodando = false; explodir(eu.x, eu.y, '#ff7a45', 60, 300); onda(eu.x, eu.y, 140, '#ff7a45'); tremer(14);
-  if (preso) { preso.estado = 'solto'; preso = null; }
   const v = S.porao, tinha = S.perdida; S.porao = 0;
   if (v > 0) S.perdida = {x: eu.x, y: eu.y, v};
   salvar();
@@ -278,12 +259,11 @@ function morrer() {
   $('pMorte').hidden = false;
 }
 function matar(n) {
-  n.morto = true; if (alvo === n) { alvo = null; querArremessar = false; }
+  n.morto = true; if (alvo === n) alvo = null;
   const grande = n.tipo === 'colosso';
   explodir(n.x, n.y, n.t.cor, grande ? 60 : 28, grande ? 320 : 220); explodir(n.x, n.y, '#fff1a8', 10, 120); onda(n.x, n.y, grande ? 130 : 75, n.t.cor); tremer(grande ? 10 : 4);
   const total = Math.round(n.t.sc * n.f), k = grande ? 6 : 3;
   for (let i = 0; i < k; i++) { const a = rnd(0, 6.28), s = rnd(60, 160); sucatas.push({x: n.x, y: n.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, v: Math.max(1, Math.round(total / k)), fase: rnd(0, 6)}); }
-  for (let i = 0; i < (grande ? 2 : 1); i++) gerarPedra(n.x + rnd(-20, 20), n.y + rnd(-20, 20));   // o casco destruído vira munição
   if (Math.random() < {drone: .06, vespa: .1, colosso: .35}[n.tipo] && caixas.length < 30) caixas.push({x: n.x, y: n.y, it: novoItem(S.setor, grande ? 2 : 1), fase: 0});
   S.xp += n.t.xp; S.abates++;
   while (S.xp >= S.nivel * 60) { S.xp -= S.nivel * 60; S.nivel++; eu.hp = hpMax(); toast(`Nível ${S.nivel}: casco reforçado`); onda(eu.x, eu.y, 90, '#ffd166'); }
@@ -291,27 +271,18 @@ function matar(n) {
   salvar();
 }
 
-// ---------- entrada: toque na rocha agarra; toque no inimigo trava a mira (e arremessa se houver rocha); toque no espaço move ----------
+// ---------- entrada: toque no inimigo trava a mira; toque no espaço move ----------
 cv.addEventListener('pointerdown', ev => {
   if (!rodando || pausado) return;
   const r = cv.getBoundingClientRect(), x = (ev.clientX - r.left - cv.clientWidth / 2) / cam.z + cam.x, y = (ev.clientY - r.top - cv.clientHeight / 2) / cam.z + cam.y;
   const tol = 34 / cam.z;
   const n = maisPerto(inimigos, x, y);
   if (n && Math.hypot(n.x - x, n.y - y) < n.t.raio + tol) {
-    alvo = n; n.raiva = true; querPegar = null; querArremessar = !!preso;
-    const d = dist(eu, n), quer = preso ? ALC_LANCE - 80 : ALC_TIRO - 80;
-    if (d > quer) { const a = Math.atan2(eu.y - n.y, eu.x - n.x); eu.dx = limX(n.x + Math.cos(a) * quer); eu.dy = limY(n.y + Math.sin(a) * quer); }
-    toast(preso ? `Arremesso em ${n.t.nome}` : `Mira em ${n.t.nome}`, 1.4);
+    alvo = n; n.raiva = true;
+    toast(`Mira em ${n.t.nome}`, 1.4);
     return;
   }
-  const p = maisPerto(pedras.filter(p => p.estado === 'solto'), x, y);
-  if (p && Math.hypot(p.x - x, p.y - y) < p.r + tol) {
-    if (preso) { preso.estado = 'solto'; preso = null; }
-    querPegar = p; querArremessar = false;
-    if (dist(p, eu) >= ALC_IMA) { eu.dx = limX(p.x); eu.dy = limY(p.y); }
-    return;
-  }
-  alvo = null; querArremessar = false; querPegar = null; eu.dx = limX(x); eu.dy = limY(y);
+  alvo = null; eu.dx = limX(x); eu.dy = limY(y);
 });
 const abrir = id => { $(id).hidden = false; pausado = true; };
 const fechar = id => { $(id).hidden = true; pausado = !$('pOfi').hidden || !$('pPausa').hidden; };
@@ -320,12 +291,12 @@ $('bOfi').onclick = () => { montarOficina(); abrir('pOfi'); };
 $('bFechar').onclick = () => fechar('pOfi');
 $('bVoltar').onclick = () => fechar('pPausa');
 $('bJogar').onclick = () => { $('pIni').hidden = true; rodando = true; toast('Toque num inimigo para atirar', 4); };
-$('bRep').onclick = () => { $('pMorte').hidden = true; Object.assign(eu, {x: DOCA.x, y: DOCA.y, dx: DOCA.x, dy: DOCA.y, hp: hpMax(), esc: escAtual()}); alvo = querPegar = null; querArremessar = false; rodando = true; hud(); };
+$('bRep').onclick = () => { $('pMorte').hidden = true; Object.assign(eu, {x: DOCA.x, y: DOCA.y, dx: DOCA.x, dy: DOCA.y, hp: hpMax(), esc: escAtual()}); alvo = null; rodando = true; hud(); };
 document.addEventListener('visibilitychange', () => { if (!document.hidden) return; salvar(); if (rodando && !pausado) abrir('pPausa'); });
 function montarOficina() {
   $('ups').innerHTML = UPS.map(u => { const n = S.up[u.k], c = custo(u, n);
     return `<div class="up"><b>${u.nome} · nv ${n}</b><small>${u.desc(n)} → ${u.desc(n + 1).split(' ').pop()}</small><button data-k="${u.k}" ${S.banco < c ? 'disabled' : ''}>${fmt(c)} ▣</button></div>`; }).join('')
-    + `<p class="dica">No banco: ${fmt(S.banco)} ▣. A sucata do porão só conta depois de entregue na Doca. O piloto automático caça o inimigo mais próximo, arremessa rochas que estiverem perto e volta à Doca com o porão cheio ou o casco fraco.</p>`
+    + `<p class="dica">No banco: ${fmt(S.banco)} ▣. A sucata do porão só conta depois de entregue na Doca. O piloto automático caça o inimigo mais próximo, recolhe caixas e volta à Doca com o porão cheio ou o casco fraco.</p>`
     + `<h3>Equipado</h3>` + Object.keys(SLOT).map(k => { const it = S.eq[k];
       return `<div class="item"><b class="${it ? 'r' + it.r : ''}">${it ? it.nome : SLOT[k].nome + ': vazio'}</b><small>${it ? descItem(it) : 'Derrube inimigos para achar um'}</small></div>`; }).join('')
     + `<h3>Hangar ${S.inv.length}/20</h3>` + (S.inv.length ? S.inv.map((it, i) =>
@@ -341,12 +312,11 @@ $('ups').onclick = e => { const ds = e.target.dataset || {};
 
 function pilotoAuto() {
   const naDoca = dist(eu, DOCA) < RDOCA;
-  if (eu.hp < hpMax() * .35 || livre() <= 0 || (naDoca && eu.hp < hpMax() * .95)) { alvo = null; querArremessar = false; if (!naDoca) { eu.dx = DOCA.x; eu.dy = DOCA.y; } return; }
-  if (!preso && !querPegar) { const p = maisPerto(pedras.filter(p => p.estado === 'solto'), eu.x, eu.y); if (p && dist(p, eu) < ALC_IMA) querPegar = p; }
+  if (eu.hp < hpMax() * .35 || livre() <= 0 || (naDoca && eu.hp < hpMax() * .95)) { alvo = null; if (!naDoca) { eu.dx = DOCA.x; eu.dy = DOCA.y; } return; }
   const cx2 = maisPerto(caixas, eu.x, eu.y);
-  if (cx2 && dist(cx2, eu) < 450 && S.inv.length < 20) { alvo = null; querArremessar = false; eu.dx = cx2.x; eu.dy = cx2.y; return; }
+  if (cx2 && dist(cx2, eu) < 450 && S.inv.length < 20) { alvo = null; eu.dx = cx2.x; eu.dy = cx2.y; return; }
   const n = maisPerto(inimigos, eu.x, eu.y); if (!n) return;
-  alvo = n; querArremessar = !!preso;
+  alvo = n;
   const a = Math.atan2(eu.y - n.y, eu.x - n.x) + .5;   // aproxima de lado: a nave fica em movimento e desvia dos tiros
   eu.dx = limX(n.x + Math.cos(a) * 300); eu.dy = limY(n.y + Math.sin(a) * 300);
 }
@@ -357,19 +327,16 @@ function passo(dt) {
   cam.tremor = Math.max(0, cam.tremor - 30 * dt);
   inimigos = inimigos.filter(n => !n.morto);
   if (inimigos.length < 26 && agora > proxIni) { gerarInimigo(); proxIni = agora + 2; }
-  if (pedras.length < 61 && agora > proxPedra) { const p = lugar(0, 700); gerarPedra(p.x, p.y); proxPedra = agora + 1.5; }
   if (auto && (autoT -= dt) <= 0) { autoT = .25; pilotoAuto(); }
-  if (alvo && alvo.morto) { alvo = null; querArremessar = false; }
+  if (alvo && alvo.morto) alvo = null;
+  if (alvo && dist(alvo, eu) > ALC_TIRO - 40) {   // mira travada: a nave persegue o alvo até ficar no alcance dos canhões
+    const a = Math.atan2(eu.y - alvo.y, eu.x - alvo.x); eu.dx = limX(alvo.x + Math.cos(a) * (ALC_TIRO - 80)); eu.dy = limY(alvo.y + Math.sin(a) * (ALC_TIRO - 80)); }
   const v = velAtual();
 
-  // ímã: agarra a rocha pedida quando ela entra no alcance
-  if (querPegar && querPegar.estado !== 'solto') querPegar = null;
-  if (querPegar && !preso && dist(querPegar, eu) < ALC_IMA) { preso = querPegar; preso.estado = 'preso'; preso.carga = .6; querPegar = null; eu.feixe = .3; }
-  if (preso && alvo && querArremessar && dist(alvo, eu) < ALC_LANCE) lancar();
   if (alvo && dist(alvo, eu) < ALC_TIRO && agora - eu.ultTiro > .3) {   // projéteis saem alternando dos dois canhões
     eu.ultTiro = agora; eu.lado = -(eu.lado || 1);
     const c = Math.cos(eu.ang), s = Math.sin(eu.ang), bx = eu.x + c * 22 - s * 6.3 * eu.lado, by = eu.y + s * 22 + c * 6.3 * eu.lado, a = Math.atan2(alvo.y - by, alvo.x - bx);
-    tiros.push({x: bx, y: by, vx: Math.cos(a) * 950, vy: Math.sin(a) * 950, vida: .7, meu: true, dano: danoAtual(), cor: '#4de2c5'});
+    tiros.push({x: bx, y: by, vx: Math.cos(a) * 950, vy: Math.sin(a) * 950, vida: .7, meu: true, alvo, dano: danoAtual(), cor: '#4de2c5'});
     explodir(bx, by, '#e9fffa', 3, 70);
   }
 
@@ -380,40 +347,12 @@ function passo(dt) {
   if (alvo && dist(alvo, eu) < ALC_TIRO + 120) rumo = Math.atan2(alvo.y - eu.y, alvo.x - eu.x);   // de frente para o alvo: os tiros saem do bico
   if (rumo !== null) { const da = rumo - eu.ang; eu.ang += Math.atan2(Math.sin(da), Math.cos(da)) * Math.min(1, 12 * dt); }
   eu.vx = (eu.x - ox) / dt; eu.vy = (eu.y - oy) / dt;
-  eu.flash = Math.max(0, eu.flash - dt); eu.feixe = Math.max(0, eu.feixe - dt);
+  eu.flash = Math.max(0, eu.flash - dt);
   if (agora - eu.ultHit > 5) eu.esc = Math.min(escAtual(), eu.esc + escAtual() * .12 * dt);
   if (dist(eu, DOCA) < RDOCA) {
     eu.hp = Math.min(hpMax(), eu.hp + 40 * dt);   // doca conserta o casco
     if (S.porao > 0) { toast(`+${fmt(S.porao)} ▣ entregues na Doca`); S.banco += S.porao; S.porao = 0; onda(DOCA.x, DOCA.y, 120, '#ffd166'); salvar(); }
   }
-
-  // rochas: presa balança atrás da nave numa mola; a força do arremesso acompanha o balanço
-  for (const p of pedras) {
-    if (p.estado === 'preso') {
-      const L = 62, tx = eu.x - Math.cos(eu.ang) * L, ty = eu.y - Math.sin(eu.ang) * L;
-      p.vx += (30 * (tx - p.x) - 4 * p.vx) * dt; p.vy += (30 * (ty - p.y) - 4 * p.vy) * dt;
-      p.x += p.vx * dt; p.y += p.vy * dt; p.ang += p.rot * dt * 3;
-      const alvoF = Math.max(.6, Math.min(2.2, .6 + Math.hypot(p.vx, p.vy) / 450));
-      p.carga += (alvoF - p.carga) * Math.min(1, 2.5 * dt);   // suavizado: o puxão inicial do ímã não conta como balanço
-    } else if (p.estado === 'voando') {
-      p.vida -= dt;
-      if (p.alvo && !p.alvo.morto) {   // leve correção de rota até o alvo
-        const s = Math.hypot(p.vx, p.vy), a0 = Math.atan2(p.vy, p.vx), da = Math.atan2(p.alvo.y - p.y, p.alvo.x - p.x) - a0,
-          a = a0 + Math.max(-4 * dt, Math.min(4 * dt, Math.atan2(Math.sin(da), Math.cos(da))));
-        p.vx = Math.cos(a) * s; p.vy = Math.sin(a) * s;
-      }
-      p.x += p.vx * dt; p.y += p.vy * dt; p.ang += p.rot * dt * 8;
-      if (Math.random() < .6) part.push({x: p.x, y: p.y, vx: 0, vy: 0, vida: .3, cor: '#ff9a5c', t: 3});
-      for (const n of inimigos) if (!n.morto && Math.hypot(n.x - p.x, n.y - p.y) < n.t.raio + p.r) { acertar(n, danoIma(S.up.ima) * p.forca, true); quebrar(p); break; }
-      if (p.vida <= 0) p.estado = 'solto';   // errou: vira rocha solta de novo
-    } else {
-      const k = Math.min(1, 1.2 * dt); p.vx -= p.vx * k; p.vy -= p.vy * k;
-      p.x += p.vx * dt; p.y += p.vy * dt; p.ang += p.rot * dt;
-    }
-    if (p.x < 40 || p.x > W - 40) { p.vx *= -1; p.x = Math.max(40, Math.min(W - 40, p.x)); }
-    if (p.y < 40 || p.y > H - 40) { p.vy *= -1; p.y = Math.max(40, Math.min(H - 40, p.y)); }
-  }
-  pedras = pedras.filter(p => !p.quebrou);
 
   for (const n of inimigos) {
     n.flash = Math.max(0, n.flash - dt);
@@ -432,12 +371,13 @@ function passo(dt) {
   }
   for (const t of tiros) {
     t.vida -= dt; t.x += t.vx * dt; t.y += t.vy * dt;
+    if (t.meu && !t.alvo.morto) { const a = Math.atan2(t.alvo.y - t.y, t.alvo.x - t.x); t.vx = Math.cos(a) * 950; t.vy = Math.sin(a) * 950; }   // tiro guiado: o alvo se mexe durante o voo
     if (t.meu) { for (const n of inimigos) if (!n.morto && Math.hypot(n.x - t.x, n.y - t.y) < n.t.raio + 4) { t.vida = 0; explodir(t.x, t.y, '#4de2c5', 5, 120); acertar(n, t.dano, false); break; } continue; }
     if (Math.hypot(t.x - eu.x, t.y - eu.y) < 20 && t.vida > 0) { t.vida = 0; ferir(t.dano); if (!rodando) return; }
   }
   tiros = tiros.filter(t => t.vida > 0);
 
-  // sucata: o ímã puxa as porcas próximas para o porão
+  // sucata: a nave puxa as porcas próximas para o porão
   for (let i = sucatas.length - 1; i >= 0; i--) { const c = sucatas[i], d = dist(c, eu); c.fase += dt;
     if (d < 170 && livre() > 0) { c.vx += (eu.x - c.x) / d * 1100 * dt; c.vy += (eu.y - c.y) / d * 1100 * dt; }
     else if (d < 170 && agora > cheioT) { cheioT = agora + 4; toast('Porão cheio: entregue a sucata na Doca'); }
@@ -509,9 +449,6 @@ function desenhar(rel) {
     cx.save(); cx.translate(c.x, c.y); cx.rotate(rel * .8); cx.fillStyle = '#0c1424'; cx.fillRect(-10, -10, 20, 20); cx.strokeStyle = cor; cx.lineWidth = 2.5; cx.strokeRect(-10, -10, 20, 20);
     cx.fillStyle = cor; cx.fillRect(-3, -3, 6, 6); cx.restore(); }
   for (const c of sucatas) if (vis(c.x, c.y)) pintar(SPR.porca, c.x, c.y, c.fase * 2, 14 + Math.sin(c.fase * 5) * 2);
-  for (const p of pedras) { if (!vis(p.x, p.y)) continue; const tam = 40 * p.r / 15;
-    if (p === querPegar) { cx.strokeStyle = 'rgba(77,226,197,.7)'; cx.lineWidth = 1.5; cx.setLineDash([4, 5]); cx.beginPath(); cx.arc(p.x, p.y, p.r + 10, rel * 2, rel * 2 + 6.283); cx.stroke(); cx.setLineDash([]); }
-    pintar(SPR.pedras[p.v], p.x, p.y, p.ang, tam); }
 
   for (const n of inimigos) { if (!vis(n.x, n.y)) continue; const R = n.t.raio;
     if (n.tipo === 'vespa') {   // asas vibrando
@@ -524,8 +461,8 @@ function desenhar(rel) {
     if (n.tipo === 'drone' && n.raiva) { cx.fillStyle = 'rgba(255,77,77,.25)'; cx.beginPath(); cx.arc(n.x + Math.cos(n.ang) * 8, n.y + Math.sin(n.ang) * 8, 10, 0, 6.283); cx.fill(); }
     if (n.flash > 0) { cx.globalAlpha = n.flash / .12 * .55; cx.fillStyle = '#ffffff'; cx.beginPath(); cx.arc(n.x, n.y, R, 0, 6.283); cx.fill(); cx.globalAlpha = 1; }
     if (n.hp < n.max || n.raiva) { cx.fillStyle = 'rgba(12,20,36,.9)'; cx.fillRect(n.x - 22, n.y - R - 14, 44, 4); cx.fillStyle = '#ff7a45'; cx.fillRect(n.x - 22, n.y - R - 14, 44 * Math.max(0, n.hp / n.max), 4); }
-    if (n === alvo) {   // colchetes de mira girando: laranja = arremesso armado, verde-água = canhões
-      cx.strokeStyle = querArremessar ? '#ff7a45' : '#4de2c5'; cx.lineWidth = 2.5;
+    if (n === alvo) {   // colchetes de mira girando: verde-água
+      cx.strokeStyle = '#4de2c5'; cx.lineWidth = 2.5;
       for (let i = 0; i < 4; i++) { const a = rel * 1.5 + i * 1.571; cx.beginPath(); cx.arc(n.x, n.y, R + 12, a, a + .7); cx.stroke(); } }
   }
   for (const t of tiros) {
@@ -536,12 +473,6 @@ function desenhar(rel) {
     cx.fillStyle = '#ffffff'; cx.fillRect(t.x - 1.5, t.y - 1.5, 3, 3);
   }
 
-  // cabo magnético + medidor de força em volta da rocha presa
-  if (preso && rodando) {
-    const f = (forca(preso) - .6) / 1.6, cor = `hsl(${170 - f * 150},95%,${60 + f * 5}%)`, mxp = (eu.x + preso.x) / 2 + Math.sin(rel * 20) * 4, myp = (eu.y + preso.y) / 2 + Math.cos(rel * 17) * 4;
-    cx.strokeStyle = cor; cx.globalAlpha = .85; cx.lineWidth = 2 + (eu.feixe > 0 ? 3 : 0); cx.beginPath(); cx.moveTo(eu.x, eu.y); cx.quadraticCurveTo(mxp, myp, preso.x, preso.y); cx.stroke(); cx.globalAlpha = 1;
-    cx.lineWidth = 3; cx.beginPath(); cx.arc(preso.x, preso.y, preso.r + 8, -1.571, -1.571 + 6.283 * Math.max(.04, f)); cx.stroke();
-  }
   if (rodando || !$('pIni').hidden) {
     cx.save(); cx.translate(eu.x, eu.y); cx.rotate(eu.ang);
     const sp = Math.min(1, Math.hypot(eu.vx, eu.vy) / velAtual()), fl = 4 + sp * 14 + Math.random() * 4;
@@ -563,7 +494,6 @@ function desenhar(rel) {
   // minimapa
   mx.setTransform(1, 0, 0, 1, 0, 0); mx.clearRect(0, 0, 300, 188); const k = 300 / W;
   mx.strokeStyle = 'rgba(77,226,197,.7)'; mx.lineWidth = 2; mx.beginPath(); mx.arc(DOCA.x * k, DOCA.y * k, 7, 0, 6.283); mx.stroke();
-  mx.fillStyle = 'rgba(154,163,181,.45)'; for (const p of pedras) mx.fillRect(p.x * k - 1, p.y * k - 1, 2, 2);
   mx.fillStyle = '#ffd166'; for (const c of sucatas) mx.fillRect(c.x * k - 1.5, c.y * k - 1.5, 3, 3);
   for (const c of caixas) { mx.fillStyle = COR_RAR[c.it.r]; mx.fillRect(c.x * k - 3, c.y * k - 3, 6, 6); }
   for (const n of inimigos) { mx.fillStyle = n.raiva ? '#ff7a45' : '#7f8fae'; mx.fillRect(n.x * k - 2, n.y * k - 2, 4, 4); }
