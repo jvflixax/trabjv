@@ -1,0 +1,274 @@
+<title>Órbita Zero</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<style>
+/* Layout: one full-screen canvas; HUD pinned to the safe-area corners. Single dark look (deep-space arcade). */
+:root{
+  --void:#05070d; --hull:#0c1424; --line:#24324d; --ink:#dfe8f7; --mute:#7f8fae;
+  --plasma:#4de2c5; --ember:#ff7a45; --shield:#5aa8ff; --gold:#ffd166;
+  --f-display:'Chakra Petch','Segoe UI',system-ui,sans-serif; --f-body:'IBM Plex Sans','Segoe UI',system-ui,sans-serif;
+  color-scheme:dark;
+}
+html,body{height:100%;margin:0;background:var(--void);color:var(--ink);font-family:var(--f-body);overflow:hidden;
+  -webkit-user-select:none;user-select:none;touch-action:none}
+#cv{position:fixed;inset:0;width:100%;height:100%;display:block}
+.hud{position:fixed;left:0;right:0;top:0;padding:calc(env(safe-area-inset-top,0px) + 10px) max(16px,env(safe-area-inset-right,0px)) 0 max(16px,env(safe-area-inset-left,0px));
+  display:flex;gap:12px;align-items:flex-start;pointer-events:none}
+.bars{display:grid;gap:5px;width:min(230px,48vw)}
+.bar{height:9px;background:rgba(36,50,77,.7);border-radius:2px;overflow:hidden;position:relative}
+.bar i{position:absolute;inset:0 auto 0 0;display:block;transition:width .15s}
+.bar.hp i{background:var(--plasma)} .bar.sh i{background:var(--shield)} .bar.xp{height:4px} .bar.xp i{background:var(--gold)}
+.lbl{font:600 10px var(--f-display);letter-spacing:.12em;text-transform:uppercase;color:var(--mute);display:flex;justify-content:space-between;font-variant-numeric:tabular-nums}
+.stats{margin-left:auto;text-align:right;font-family:var(--f-display);font-variant-numeric:tabular-nums}
+.stats b{display:block;font-size:20px;color:var(--gold);letter-spacing:.04em}
+.stats span{font-size:11px;color:var(--mute);letter-spacing:.1em;text-transform:uppercase}
+.ctl{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 16px);display:flex;gap:10px}
+button{font:700 13px var(--f-display);letter-spacing:.1em;text-transform:uppercase;color:var(--ink);background:var(--hull);
+  border:1px solid var(--line);border-radius:4px;padding:12px 16px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--plasma);outline-offset:2px}
+button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px var(--plasma) inset}
+#mini{position:fixed;left:max(16px,env(safe-area-inset-left,0px));bottom:calc(env(safe-area-inset-bottom,0px) + 16px);
+  width:150px;height:94px;background:rgba(12,20,36,.82);border:1px solid var(--line);border-radius:4px}
+.toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top,0px) + 64px);transform:translateX(-50%);font:700 13px var(--f-display);
+  letter-spacing:.14em;text-transform:uppercase;color:var(--gold);text-shadow:0 0 12px rgba(255,209,102,.4);pointer-events:none;text-align:center}
+.panel{position:fixed;inset:0;display:grid;place-items:center;background:rgba(5,7,13,.72);padding:16px}
+.card{width:min(380px,100%);background:var(--hull);border:1px solid var(--line);border-radius:6px;padding:20px;display:grid;gap:14px}
+.card h2{margin:0;font:700 22px var(--f-display);letter-spacing:.06em;text-wrap:balance}
+.card p{margin:0;color:var(--mute);font-size:14px;line-height:1.5}
+.up{display:grid;grid-template-columns:1fr auto;gap:4px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.up b{font-family:var(--f-display);letter-spacing:.05em} .up small{color:var(--mute);grid-column:1}
+.up button{grid-row:1/3;grid-column:2;padding:10px 12px;color:var(--gold)}
+.up button:disabled{opacity:.4;cursor:default}
+.dica{font-size:12px;color:var(--mute);line-height:1.45}
+[hidden]{display:none!important}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+
+<canvas id="cv" aria-label="Campo de jogo: toque para mover a nave, toque num inimigo para atacar"></canvas>
+<div class="hud">
+  <div class="bars">
+    <div class="lbl"><span>Casco</span><span id="tHp"></span></div><div class="bar hp"><i id="bHp"></i></div>
+    <div class="lbl"><span>Escudo</span><span id="tSh"></span></div><div class="bar sh"><i id="bSh"></i></div>
+    <div class="lbl"><span id="tNv">Nível 1</span><span id="tXp"></span></div><div class="bar xp"><i id="bXp"></i></div>
+  </div>
+  <div class="stats"><b id="tCr">0 ◈</b><span id="tSet">Setor 1 · 0 abates</span></div>
+</div>
+<canvas id="mini" width="300" height="188" aria-hidden="true"></canvas>
+<div class="ctl"><button id="bAuto" aria-pressed="false">Piloto auto</button><button id="bOfi">Oficina</button></div>
+<div class="toast" id="toast"></div>
+
+<div class="panel" id="pIni">
+  <div class="card">
+    <h2>Órbita Zero</h2>
+    <p>Você pilota uma caça-sucata no Cinturão de Vael. Derrube drones, recolha cápsulas de cristal e melhore a nave na oficina.</p>
+    <div class="dica">Toque no espaço para voar. Toque num inimigo para travar a mira: a nave orbita e atira sozinha. Girar em volta desvia dos tiros. O escudo absorve o dano antes do casco e recarrega fora de combate.</div>
+    <button id="bJogar">Decolar</button>
+  </div>
+</div>
+<div class="panel" id="pOfi" hidden>
+  <div class="card">
+    <h2>Oficina</h2>
+    <div id="ups"></div>
+    <button id="bFechar">Voltar ao voo</button>
+  </div>
+</div>
+<div class="panel" id="pMorte" hidden>
+  <div class="card">
+    <h2>Nave abatida</h2>
+    <p id="mTx">A carcaça foi rebocada para a doca. Você perde 10% dos cristais no reparo.</p>
+    <button id="bRep">Reparar e voltar</button>
+  </div>
+</div>
+
+<script>
+(() => {
+const cv = document.getElementById('cv'), cx = cv.getContext('2d'), mini = document.getElementById('mini'), mx = mini.getContext('2d');
+const $ = id => document.getElementById(id);
+const W = 5200, H = 3400, DOCA = {x: 600, y: 600};
+const TIPOS = {
+  drone:   {nome: 'Drone Ferrugem', hp: 60,  vel: 90,  alc: 260, dano: 6,  cad: 1.6, raio: 16, cor: '#c9a27a', cr: 12, xp: 8},
+  vespa:   {nome: 'Vespa Ácida',    hp: 90,  vel: 170, alc: 300, dano: 9,  cad: 1.1, raio: 14, cor: '#b6f05a', cr: 22, xp: 14},
+  colosso: {nome: 'Colosso Âmbar',  hp: 420, vel: 60,  alc: 380, dano: 22, cad: 2.2, raio: 30, cor: '#ffb347', cr: 70, xp: 45},
+};
+let S, eu, inimigos, caps, tiros, part, alvo, auto = false, cam = {x: 0, y: 0, z: 1}, toastT = 0, rodando = false;
+
+const UPS = [
+  {k: 'laser',  nome: 'Laser',  desc: n => `Dano ${dano(n)} por disparo`, base: 60},
+  {k: 'escudo', nome: 'Escudo', desc: n => `Escudo máximo ${escMax(n)}`, base: 50},
+  {k: 'motor',  nome: 'Motor',  desc: n => `Velocidade ${vel(n)}`, base: 70},
+];
+const dano = n => 14 + n * 6, escMax = n => 80 + n * 40, vel = n => 260 + n * 22;
+const hpMax = () => 150 + (S.nivel - 1) * 25, custo = (u, n) => Math.round(u.base * Math.pow(1.6, n));
+
+function novo() { return {cr: 0, nivel: 1, xp: 0, abates: 0, setor: 1, up: {laser: 0, escudo: 0, motor: 0}}; }
+function carregar() { try { const d = JSON.parse(localStorage.getItem('orbita-zero') || 'null'); if (d && d.up) return d; } catch (e) {} return novo(); }
+function salvar() { try { localStorage.setItem('orbita-zero', JSON.stringify(S)); } catch (e) {} }
+
+function iniciar(dados) {
+  S = dados && dados.up ? dados : carregar();
+  eu = {x: DOCA.x, y: DOCA.y, dx: DOCA.x, dy: DOCA.y, ang: 0, hp: hpMax(), esc: escMax(S.up.escudo), ultHit: -99, ultTiro: 0, sentido: 1};
+  inimigos = []; caps = []; tiros = []; part = []; alvo = null;
+  for (let i = 0; i < 26; i++) gerarInimigo();
+  for (let i = 0; i < 40; i++) gerarCap();
+  hud();
+}
+function rnd(a, b) { return a + Math.random() * (b - a); }
+function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+function gerarInimigo() {
+  const r = Math.random(), tipo = r < .55 ? 'drone' : r < .88 ? 'vespa' : 'colosso', t = TIPOS[tipo], f = 1 + (S.setor - 1) * 0.35;
+  let x, y; do { x = rnd(200, W - 200); y = rnd(200, H - 200); } while (Math.hypot(x - DOCA.x, y - DOCA.y) < 900);
+  inimigos.push({tipo, t, x, y, hp: t.hp * f, max: t.hp * f, f, wx: x, wy: y, raiva: false, ult: 0, morto: false});
+}
+function gerarCap() { caps.push({x: rnd(150, W - 150), y: rnd(150, H - 150), v: Math.random() < .12 ? 40 : 8, fase: rnd(0, 6)}); }
+
+function toast(t) { $('toast').textContent = t; toastT = 2.4; }
+function hud() {
+  const hm = hpMax(), em = escMax(S.up.escudo), prox = S.nivel * 60;
+  $('bHp').style.width = (100 * eu.hp / hm) + '%'; $('tHp').textContent = `${Math.ceil(eu.hp)}/${hm}`;
+  $('bSh').style.width = (100 * eu.esc / em) + '%'; $('tSh').textContent = `${Math.ceil(eu.esc)}/${em}`;
+  $('bXp').style.width = (100 * S.xp / prox) + '%'; $('tNv').textContent = `Nível ${S.nivel}`; $('tXp').textContent = `${S.xp}/${prox} xp`;
+  $('tCr').textContent = `${S.cr.toLocaleString('pt-BR')} ◈`; $('tSet').textContent = `Setor ${S.setor} · ${S.abates} abates`;
+}
+function explodir(x, y, cor, n = 18) { for (let i = 0; i < n; i++) { const a = rnd(0, 6.28), v = rnd(40, 220); part.push({x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vida: rnd(.4, .9), cor}); } }
+function ferir(qtd) {
+  eu.ultHit = agora;
+  const e = Math.min(eu.esc, qtd); eu.esc -= e; eu.hp -= qtd - e;   // escudo primeiro, depois o casco
+  if (eu.hp <= 0) morrer();
+}
+function morrer() {
+  rodando = false; explodir(eu.x, eu.y, '#ff7a45', 50);
+  const perda = Math.floor(S.cr * .1); S.cr -= perda; salvar();
+  $('mTx').textContent = `A carcaça foi rebocada para a doca. O reparo custou ${perda.toLocaleString('pt-BR')} ◈ (10% dos cristais).`;
+  $('pMorte').hidden = false;
+}
+function matar(n) {
+  n.morto = true; alvo = alvo === n ? null : alvo; explodir(n.x, n.y, n.t.cor, n.tipo === 'colosso' ? 50 : 24);
+  const cr = Math.round(n.t.cr * n.f); S.cr += cr; S.xp += n.t.xp; S.abates++;
+  for (let i = 0; i < (n.tipo === 'colosso' ? 4 : 1); i++) caps.push({x: n.x + rnd(-40, 40), y: n.y + rnd(-40, 40), v: Math.round(6 * n.f), fase: 0});
+  while (S.xp >= S.nivel * 60) { S.xp -= S.nivel * 60; S.nivel++; eu.hp = hpMax(); toast(`Nível ${S.nivel}: casco reforçado`); }
+  if (S.abates % 20 === 0) { S.setor++; toast(`Setor ${S.setor}: inimigos mais fortes, cristais maiores`); }
+  setTimeout(gerarInimigo, 4000); salvar();
+}
+
+// ---------- entrada: toque para mover; toque num inimigo para travar ----------
+cv.addEventListener('pointerdown', ev => {
+  if (!rodando) return;
+  const r = cv.getBoundingClientRect(), x = (ev.clientX - r.left - cv.clientWidth / 2) / cam.z + cam.x, y = (ev.clientY - r.top - cv.clientHeight / 2) / cam.z + cam.y;
+  const n = inimigos.filter(n => !n.morto).sort((a, b) => Math.hypot(a.x - x, a.y - y) - Math.hypot(b.x - x, b.y - y))[0];
+  if (n && Math.hypot(n.x - x, n.y - y) < n.t.raio + 34 / cam.z) { alvo = n; n.raiva = true; toast(`Mira em ${n.t.nome}`); }
+  else { alvo = null; eu.dx = Math.max(60, Math.min(W - 60, x)); eu.dy = Math.max(60, Math.min(H - 60, y)); }
+});
+$('bAuto').onclick = () => { auto = !auto; $('bAuto').classList.toggle('on', auto); $('bAuto').setAttribute('aria-pressed', auto); toast(auto ? 'Piloto automático ligado' : 'Piloto automático desligado'); };
+$('bOfi').onclick = () => { montarOficina(); $('pOfi').hidden = false; };
+$('bFechar').onclick = () => { $('pOfi').hidden = true; };
+$('bJogar').onclick = () => { $('pIni').hidden = true; rodando = true; };
+$('bRep').onclick = () => { $('pMorte').hidden = true; eu.x = eu.dx = DOCA.x; eu.y = eu.dy = DOCA.y; eu.hp = hpMax(); eu.esc = escMax(S.up.escudo); alvo = null; rodando = true; hud(); };
+function montarOficina() {
+  $('ups').innerHTML = UPS.map(u => { const n = S.up[u.k], c = custo(u, n);
+    return `<div class="up"><b>${u.nome} · nv ${n}</b><small>${u.desc(n)} → ${u.desc(n + 1).split(' ').pop()}</small><button data-k="${u.k}" ${S.cr < c ? 'disabled' : ''}>${c} ◈</button></div>`; }).join('')
+    + `<p class="dica">Cristais: ${S.cr.toLocaleString('pt-BR')} ◈. O piloto automático caça o inimigo mais próximo e recolhe cápsulas sozinho.</p>`;
+}
+$('ups').onclick = e => { const k = e.target.dataset && e.target.dataset.k; if (!k) return; const u = UPS.find(x => x.k === k), c = custo(u, S.up[k]);
+  if (S.cr < c) return; S.cr -= c; S.up[k]++; if (k === 'escudo') eu.esc = escMax(S.up.escudo); salvar(); montarOficina(); hud(); };
+
+// ---------- simulação ----------
+let agora = 0;
+function passo(dt) {
+  agora += dt; if (toastT > 0 && (toastT -= dt) <= 0) $('toast').textContent = '';
+  const v = vel(S.up.motor), alc = 320;
+  if (auto && !alvo) {
+    const n = inimigos.filter(n => !n.morto).sort((a, b) => dist(a, eu) - dist(b, eu))[0];
+    const c = caps.slice().sort((a, b) => dist(a, eu) - dist(b, eu))[0];
+    if (c && (!n || dist(c, eu) < 260)) { eu.dx = c.x; eu.dy = c.y; } else if (n) alvo = n;
+  }
+  if (alvo && alvo.morto) alvo = null;
+  if (alvo) {   // órbita: ponto à frente no círculo em volta do alvo, recalculado sempre (a nave nunca para)
+    const raio = Math.min(alc - 40, alvo.t.alc + 30), a0 = Math.atan2(eu.y - alvo.y, eu.x - alvo.x), d = dist(eu, alvo);
+    const r = d > raio * 1.4 ? raio : raio, passoAng = (v * .5) / raio * eu.sentido;
+    eu.dx = alvo.x + r * Math.cos(a0 + passoAng); eu.dy = alvo.y + r * Math.sin(a0 + passoAng);
+    if (eu.dx < 80 || eu.dx > W - 80 || eu.dy < 80 || eu.dy > H - 80) eu.sentido *= -1;
+    if (d < alc && agora - eu.ultTiro > .55) { eu.ultTiro = agora; alvo.raiva = true; alvo.hp -= dano(S.up.laser);
+      tiros.push({de: {x: eu.x, y: eu.y}, para: {x: alvo.x, y: alvo.y}, vida: .12, cor: '#4de2c5', laser: true});
+      if (alvo.hp <= 0) matar(alvo); }
+  }
+  const ddx = eu.dx - eu.x, ddy = eu.dy - eu.y, dd = Math.hypot(ddx, ddy);
+  if (dd > 2) { const s = Math.min(dd, v * dt); eu.x += ddx / dd * s; eu.y += ddy / dd * s; eu.ang = Math.atan2(ddy, ddx); }
+  if (agora - eu.ultHit > 5) eu.esc = Math.min(escMax(S.up.escudo), eu.esc + escMax(S.up.escudo) * .12 * dt);
+  if (dist(eu, DOCA) < 160) eu.hp = Math.min(hpMax(), eu.hp + 40 * dt);   // doca conserta o casco
+  for (const n of inimigos) {
+    if (n.morto) continue;
+    const d = dist(n, eu);
+    if (d < 380 || n.raiva) n.raiva = true;
+    let gx = n.wx, gy = n.wy;
+    if (n.raiva && dist(eu, DOCA) > 220) { const a = Math.atan2(n.y - eu.y, n.x - eu.x); gx = eu.x + Math.cos(a) * n.t.alc * .8; gy = eu.y + Math.sin(a) * n.t.alc * .8;
+      if (d < n.t.alc && agora - n.ult > n.t.cad) { n.ult = agora; const ang = Math.atan2(eu.y - n.y, eu.x - n.x);
+        tiros.push({x: n.x, y: n.y, vx: Math.cos(ang) * 420, vy: Math.sin(ang) * 420, vida: 1.1, dano: n.t.dano * n.f, cor: n.t.cor}); } }
+    else if (Math.hypot(n.wx - n.x, n.wy - n.y) < 20) { n.wx = Math.max(100, Math.min(W - 100, n.x + rnd(-500, 500))); n.wy = Math.max(100, Math.min(H - 100, n.y + rnd(-500, 500))); }
+    if (n.raiva && d > 1400) n.raiva = false;
+    const mx2 = gx - n.x, my2 = gy - n.y, md = Math.hypot(mx2, my2);
+    if (md > 2) { const s = Math.min(md, n.t.vel * dt); n.x += mx2 / md * s; n.y += my2 / md * s; }
+  }
+  for (const t of tiros) {
+    t.vida -= dt; if (t.laser) continue;
+    t.x += t.vx * dt; t.y += t.vy * dt;
+    if (Math.hypot(t.x - eu.x, t.y - eu.y) < 18 && t.vida > 0) { t.vida = 0; ferir(t.dano); explodir(t.x, t.y, '#5aa8ff', 6); }
+  }
+  tiros = tiros.filter(t => t.vida > 0);
+  for (let i = caps.length - 1; i >= 0; i--) { const c = caps[i]; c.fase += dt;
+    if (dist(c, eu) < 34) { S.cr += c.v * S.setor; caps.splice(i, 1); explodir(c.x, c.y, '#ffd166', 8); if (caps.length < 40) setTimeout(gerarCap, 3000); } }
+  for (const p of part) { p.vida -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .96; p.vy *= .96; }
+  part = part.filter(p => p.vida > 0);
+}
+
+// ---------- desenho ----------
+const estrelas = Array.from({length: 380}, () => ({x: Math.random() * W, y: Math.random() * H, p: rnd(.2, .9), r: rnd(.4, 1.6)}));
+function desenhar() {
+  const w = cv.clientWidth, h = cv.clientHeight, dpr = Math.min(2, devicePixelRatio || 1);
+  if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+  cam.z = Math.max(.75, Math.min(1.4, Math.min(w, h) / 500)); cam.x += (eu.x - cam.x) * .12; cam.y += (eu.y - cam.y) * .12;
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.fillStyle = '#05070d'; cx.fillRect(0, 0, w, h);
+  for (const s of estrelas) { const sx = ((s.x - cam.x * s.p) % w + w) % w, sy = ((s.y - cam.y * s.p) % h + h) % h;
+    cx.fillStyle = `rgba(223,232,247,${s.p * .8})`; cx.fillRect(sx, sy, s.r, s.r); }
+  cx.save(); cx.translate(w / 2, h / 2); cx.scale(cam.z, cam.z); cx.translate(-cam.x, -cam.y);
+  cx.strokeStyle = 'rgba(255,122,69,.35)'; cx.setLineDash([18, 14]); cx.lineWidth = 2; cx.strokeRect(0, 0, W, H); cx.setLineDash([]);
+  cx.strokeStyle = 'rgba(77,226,197,.5)'; cx.lineWidth = 3; cx.beginPath(); cx.arc(DOCA.x, DOCA.y, 160, 0, 6.28); cx.stroke();
+  cx.fillStyle = 'rgba(77,226,197,.08)'; cx.fill(); cx.fillStyle = '#4de2c5'; cx.font = '700 18px Chakra Petch, sans-serif'; cx.textAlign = 'center';
+  cx.fillText('DOCA VAEL', DOCA.x, DOCA.y + 6);
+  for (const c of caps) { const pul = 1 + Math.sin(c.fase * 4) * .15; cx.fillStyle = c.v > 20 ? '#ff9ff3' : '#ffd166';
+    cx.beginPath(); cx.moveTo(c.x, c.y - 9 * pul); cx.lineTo(c.x + 7 * pul, c.y); cx.lineTo(c.x, c.y + 9 * pul); cx.lineTo(c.x - 7 * pul, c.y); cx.fill(); }
+  for (const n of inimigos) { if (n.morto) continue; const R = n.t.raio;
+    cx.fillStyle = n.t.cor; cx.beginPath();
+    if (n.tipo === 'drone') { cx.arc(n.x, n.y, R, 0, 6.28); } else if (n.tipo === 'vespa') { cx.moveTo(n.x, n.y - R); cx.lineTo(n.x + R, n.y + R * .8); cx.lineTo(n.x - R, n.y + R * .8); }
+    else { for (let i = 0; i < 6; i++) { const a = i * 1.047; cx.lineTo(n.x + Math.cos(a) * R, n.y + Math.sin(a) * R); } }
+    cx.fill(); if (n.raiva) { cx.strokeStyle = 'rgba(255,122,69,.8)'; cx.lineWidth = 2; cx.stroke(); }
+    cx.fillStyle = 'rgba(12,20,36,.9)'; cx.fillRect(n.x - 22, n.y - R - 12, 44, 4); cx.fillStyle = '#ff7a45'; cx.fillRect(n.x - 22, n.y - R - 12, 44 * Math.max(0, n.hp / n.max), 4);
+    if (n === alvo) { cx.strokeStyle = '#4de2c5'; cx.lineWidth = 2; cx.setLineDash([6, 6]); cx.beginPath(); cx.arc(n.x, n.y, R + 12, 0, 6.28); cx.stroke(); cx.setLineDash([]); } }
+  for (const t of tiros) { cx.strokeStyle = t.cor; cx.lineWidth = t.laser ? 3 : 2; cx.beginPath();
+    if (t.laser) { cx.moveTo(t.de.x, t.de.y); cx.lineTo(t.para.x, t.para.y); } else { cx.moveTo(t.x, t.y); cx.lineTo(t.x - t.vx * .03, t.y - t.vy * .03); } cx.stroke(); }
+  for (const p of part) { cx.globalAlpha = Math.max(0, p.vida); cx.fillStyle = p.cor; cx.fillRect(p.x - 2, p.y - 2, 4, 4); } cx.globalAlpha = 1;
+  if (rodando || $('pIni').hidden === false) {
+    cx.save(); cx.translate(eu.x, eu.y); cx.rotate(eu.ang);
+    if (eu.esc > 0) { cx.strokeStyle = `rgba(90,168,255,${.15 + .35 * eu.esc / escMax(S.up.escudo)})`; cx.lineWidth = 2; cx.beginPath(); cx.arc(0, 0, 24, 0, 6.28); cx.stroke(); }
+    cx.fillStyle = '#dfe8f7'; cx.beginPath(); cx.moveTo(18, 0); cx.lineTo(-12, 11); cx.lineTo(-6, 0); cx.lineTo(-12, -11); cx.closePath(); cx.fill();
+    cx.fillStyle = '#4de2c5'; cx.fillRect(-15, -3, 5 + Math.random() * 4, 6); cx.restore(); }
+  cx.restore();
+  // minimapa
+  mx.setTransform(1, 0, 0, 1, 0, 0); mx.clearRect(0, 0, 300, 188); const k = 300 / W;
+  mx.strokeStyle = 'rgba(77,226,197,.6)'; mx.beginPath(); mx.arc(DOCA.x * k, DOCA.y * k, 6, 0, 6.28); mx.stroke();
+  mx.fillStyle = '#ffd166'; for (const c of caps) mx.fillRect(c.x * k - 1, c.y * k - 1, 2, 2);
+  for (const n of inimigos) if (!n.morto) { mx.fillStyle = n.raiva ? '#ff7a45' : '#7f8fae'; mx.fillRect(n.x * k - 2, n.y * k - 2, 4, 4); }
+  mx.fillStyle = '#4de2c5'; mx.beginPath(); mx.arc(eu.x * k, eu.y * k, 4, 0, 6.28); mx.fill();
+  mx.strokeStyle = 'rgba(223,232,247,.35)'; mx.strokeRect((cam.x - w / 2 / cam.z) * k, (cam.y - h / 2 / cam.z) * k, w / cam.z * k, h / cam.z * k);
+}
+
+let ult = performance.now(), hudT = 0;
+function loop(t) {
+  const dt = Math.min(.05, (t - ult) / 1000); ult = t;
+  if (rodando) { passo(dt); if ((hudT += dt) > .1) { hudT = 0; hud(); } }
+  desenhar(); requestAnimationFrame(loop);
+}
+window.claude?.hot?.snapshot?.(() => S);
+const start = d => { iniciar(d); requestAnimationFrame(loop); };
+window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? null);
+})();
+</script>
