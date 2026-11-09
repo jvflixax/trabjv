@@ -46,6 +46,13 @@ button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px va
 .item{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
 .item b{font-family:var(--f-display);letter-spacing:.04em;font-size:14px} .item small{color:var(--mute);font-size:12px}
 .item .acoes{grid-row:1/3;grid-column:2;display:flex;gap:6px} .item button{padding:9px 10px;font-size:11px}
+.ctl{display:grid;grid-template-columns:auto auto} #bPat{grid-column:1/3;color:var(--gold);border-color:var(--gold)}
+.alvoPat{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:center;padding:12px;background:rgba(5,7,13,.5);border:1px solid var(--line);border-radius:4px}
+.alvoPat b{font-family:var(--f-display);font-size:16px;letter-spacing:.04em} .alvoPat small{display:block;color:var(--mute);font-size:12px;line-height:1.6;font-variant-numeric:tabular-nums}
+.setor{display:flex;align-items:center;justify-content:space-between;gap:10px;font:700 15px var(--f-display);letter-spacing:.08em}
+.setor button{padding:8px 14px} .linha{display:flex;gap:10px;flex-wrap:wrap} .linha button{flex:1}
+.res{font-size:13px;line-height:1.6;color:var(--ink);font-variant-numeric:tabular-nums} .res .ok{color:var(--plasma)} .res .ruim{color:var(--ember)}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mute)} .chk input{width:20px;height:20px;accent-color:var(--plasma)}
 .r0{color:#c3cbd9} .r1{color:#5aa8ff} .r2{color:#c58cff} .r3{color:var(--gold)} .melhor{color:var(--plasma)}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
@@ -61,7 +68,7 @@ button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px va
   <div class="stats"><b id="tCr">0 ▣</b><span id="tPor">Porão 0/150</span><span id="tSet">Setor 1 · 0 abates</span></div>
 </div>
 <canvas id="mini" width="300" height="188" aria-hidden="true"></canvas>
-<div class="ctl"><button id="bAuto" aria-pressed="false">Piloto auto</button><button id="bOfi">Oficina</button></div>
+<div class="ctl"><button id="bPat" hidden>Patrulha</button><button id="bAuto" aria-pressed="false">Piloto auto</button><button id="bOfi">Oficina</button></div>
 <div class="toast" id="toast" role="status"></div>
 
 <div class="panel" id="pIni">
@@ -70,6 +77,7 @@ button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px va
     <p>Você pilota uma caça-sucata no Cinturão de Vael. Derrube drones com os canhões, junte sucata e melhore a nave na oficina.</p>
     <div class="dica"><b>Toque no espaço</b> para voar. <b>Toque num inimigo</b> para travar a mira: os canhões da nave atiram sozinhos enquanto ele estiver no alcance. Continue se mexendo para desviar dos tiros.</div>
     <div class="dica">Inimigos derrubados soltam <b>sucata ▣</b>. Ela vai para o porão e só vira dinheiro quando você <b>entrega na Doca Vael</b>. Se a nave cair, a carga fica flutuando no lugar: volte para buscar.</div>
+    <div class="dica"><b>Patrulha:</b> dentro da Doca aparece o botão Patrulha. Escolha o setor, veja o inimigo e lute pelo menu, sem pilotar.</div>
     <div class="dica"><b>Equipamentos:</b> inimigos às vezes soltam caixas brilhantes com canhões, geradores de escudo e propulsores. Equipe na Oficina. Quanto mais forte o setor, mais itens raros.</div>
     <button id="bJogar">Decolar</button>
   </div>
@@ -79,6 +87,18 @@ button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px va
     <h2>Oficina</h2>
     <div id="ups"></div>
     <button id="bFechar">Voltar ao voo</button>
+  </div>
+</div>
+<div class="panel" id="pPat" hidden>
+  <div class="card">
+    <h2>Patrulha</h2>
+    <p>A nave sai da Doca, enfrenta o inimigo e volta com a sucata direto para o banco. O casco consertado na Doca é o mesmo que entra na luta.</p>
+    <div class="setor"><button id="patMenos" aria-label="Setor anterior">‹</button><span id="patSet">Setor 1</span><button id="patMais" aria-label="Próximo setor">›</button></div>
+    <div class="alvoPat" id="patAlvo"><canvas id="patImg" width="192" height="192" style="width:96px;height:96px"></canvas><div id="patTx"></div></div>
+    <div class="linha"><button id="patBusca">Procurar inimigo</button><button id="patLuta">Lutar</button></div>
+    <label class="chk"><input type="checkbox" id="patAuto"> Patrulha automática (pula inimigos perigosos e espera o conserto quando o casco cai)</label>
+    <div class="res" id="patRes" role="status"></div>
+    <button id="patFechar">Voltar à Doca</button>
   </div>
 </div>
 <div class="panel" id="pPausa" hidden>
@@ -232,6 +252,7 @@ function hud() {
   $('bSh').style.width = (100 * eu.esc / em) + '%'; $('tSh').textContent = `${Math.ceil(eu.esc)}/${em}`;
   $('bXp').style.width = (100 * S.xp / prox) + '%'; $('tNv').textContent = `Nível ${S.nivel}`; $('tXp').textContent = `${S.xp}/${prox} xp`;
   $('tCr').textContent = `${fmt(S.banco)} ▣`; $('tSet').textContent = `Setor ${S.setor} · ${S.abates} abates`;
+  $('bPat').hidden = !rodando || dist(eu, DOCA) >= RDOCA;
   $('tPor').textContent = `Porão ${fmt(S.porao)}/${fmt(pm)}`; $('tPor').classList.toggle('cheio', S.porao >= pm);
 }
 
@@ -265,10 +286,13 @@ function matar(n) {
   const total = Math.round(n.t.sc * n.f), k = grande ? 6 : 3;
   for (let i = 0; i < k; i++) { const a = rnd(0, 6.28), s = rnd(60, 160); sucatas.push({x: n.x, y: n.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, v: Math.max(1, Math.round(total / k)), fase: rnd(0, 6)}); }
   if (Math.random() < {drone: .06, vespa: .1, colosso: .35}[n.tipo] && caixas.length < 30) caixas.push({x: n.x, y: n.y, it: novoItem(S.setor, grande ? 2 : 1), fase: 0});
-  S.xp += n.t.xp; S.abates++;
-  while (S.xp >= S.nivel * 60) { S.xp -= S.nivel * 60; S.nivel++; eu.hp = hpMax(); toast(`Nível ${S.nivel}: casco reforçado`); onda(eu.x, eu.y, 90, '#ffd166'); }
-  if (S.abates % 20 === 0) { S.setor++; toast(`Setor ${S.setor}: inimigos mais fortes, mais sucata`); }
+  contarAbate(n.t.xp, 1);
   salvar();
+}
+function contarAbate(xp, qtd) {
+  S.xp += xp;
+  for (let i = 0; i < qtd; i++) { S.abates++; if (S.abates % 20 === 0) { S.setor++; toast(`Setor ${S.setor}: inimigos mais fortes, mais sucata`); } }
+  while (S.xp >= S.nivel * 60) { S.xp -= S.nivel * 60; S.nivel++; eu.hp = hpMax(); toast(`Nível ${S.nivel}: casco reforçado`); onda(eu.x, eu.y, 90, '#ffd166'); }
 }
 
 // ---------- entrada: toque no inimigo trava a mira; toque no espaço move ----------
@@ -321,6 +345,58 @@ function pilotoAuto() {
   eu.dx = limX(n.x + Math.cos(a) * 300); eu.dy = limY(n.y + Math.sin(a) * 300);
 }
 
+// ---------- patrulha: luta por menu a partir da Doca ----------
+const pat = {setor: 0, enc: null, t: 0};
+function procurar(limpar = true) {
+  const r = Math.random(), tipo = r < .55 ? 'drone' : r < .88 ? 'vespa' : 'colosso', t = TIPOS[tipo], lider = Math.random() < .1, f = 1 + (pat.setor - 1) * .35;
+  const qtd = lider ? 1 : 1 + Math.floor(Math.random() * {drone: 4, vespa: 3, colosso: 2}[tipo]), m = lider ? 2.5 : 1;
+  pat.enc = {tipo, t, lider, qtd, hp: Math.round(t.hp * f * m), dano: Math.round(t.dano * f * m), dps: t.dano * f * m / t.cad, sc: Math.round(t.sc * f * (lider ? 4 : 1)), xp: Math.round(t.xp * (lider ? 4 : 1))};
+  mostrarPat(); if (limpar) $('patRes').textContent = '';
+}
+function simular(e, sorte) {   // abate um por vez; quem está vivo continua atirando
+  const dps = danoAtual() / .3 * sorte; let tempo = 0, dano = 0;
+  for (let i = 0; i < e.qtd; i++) { const ti = e.hp / dps; dano += e.dps * (e.qtd - i) * ti; tempo += ti; }
+  return {tempo, dano};
+}
+function risco(e) { const x = simular(e, 1).dano / (eu.hp + eu.esc); return x < .6 ? ['Fácil', 'ok'] : x < 1.15 ? ['Arriscado', ''] : ['Perigoso', 'ruim']; }
+function mostrarPat() {
+  $('patSet').textContent = `Setor ${pat.setor}${pat.setor < S.setor ? '' : ' (o mais alto)'}`;
+  $('patMenos').disabled = pat.setor <= 1; $('patMais').disabled = pat.setor >= S.setor;
+  const e = pat.enc, g = $('patImg').getContext('2d'); g.clearRect(0, 0, 192, 192); $('patLuta').disabled = !e;
+  if (!e) { $('patTx').innerHTML = '<small>Nenhum inimigo no radar. Toque em Procurar inimigo.</small>'; return; }
+  g.save(); g.translate(96, 96); g.rotate(-1.571); const tam = e.t.tam * 3.2 * (e.lider ? 1.15 : 1); g.drawImage(SPR[e.tipo], -tam / 2, -tam / 2, tam, tam); g.restore();
+  const [rt, rc] = risco(e);
+  $('patTx').innerHTML = `<b class="${e.lider ? 'r3' : ''}">${e.t.nome}${e.lider ? ' (Líder)' : ''} ×${e.qtd}</b>`
+    + `<small>Casco ${fmt(e.hp)} cada · Dano ${fmt(e.dano)} por tiro<br>Recompensa ${fmt(e.sc * e.qtd)} ▣ · ${fmt(e.xp * e.qtd)} xp<br>Risco: <span class="res ${rc}">${rt}</span></small>`;
+}
+function lutar() {
+  const e = pat.enc; if (!e) return 0;
+  const r = simular(e, rnd(.85, 1.15)), absorve = Math.min(eu.esc, r.dano); eu.ultHit = agora;
+  pat.enc = null;
+  if (r.dano >= eu.hp + eu.esc) {
+    eu.esc = 0; eu.hp = Math.max(1, Math.round(hpMax() * .1)); $('patAuto').checked = false;
+    $('patRes').innerHTML = `<span class="ruim">Derrota.</span> A nave recuou para a Doca com o casco em 10%. Sem recompensa.`;
+  } else {
+    eu.esc -= absorve; eu.hp -= r.dano - absorve;
+    const sc = e.sc * e.qtd; S.banco += sc;
+    let item = '';
+    for (let i = 0; i < e.qtd; i++) if (Math.random() < {drone: .06, vespa: .1, colosso: .35}[e.tipo] * (e.lider ? 3 : 1)) {
+      const it = novoItem(pat.setor, e.tipo === 'colosso' || e.lider ? 2 : 1);
+      if (S.inv.length < 20) { S.inv.unshift(it); item += `<br>Item: <b class="r${it.r}">${it.nome}</b> (${RAR[it.r]})`; } else item += '<br>Um item caiu, mas o hangar está cheio.';
+    }
+    contarAbate(e.xp * e.qtd, e.qtd);
+    $('patRes').innerHTML = `<span class="ok">Vitória</span> em ${r.tempo.toFixed(1)} s. +${fmt(sc)} ▣ no banco · +${fmt(e.xp * e.qtd)} xp · casco −${fmt(Math.max(0, r.dano - absorve))}${item}`;
+  }
+  salvar(); hud(); procurar(false);   // já deixa o próximo inimigo no radar
+  return r.tempo;
+}
+$('bPat').onclick = () => { if (auto) $('bAuto').onclick(); pat.setor = pat.setor ? Math.min(pat.setor, S.setor) : S.setor; if (!pat.enc) procurar(); else mostrarPat(); $('pPat').hidden = false; };
+$('patFechar').onclick = () => { $('pPat').hidden = true; $('patAuto').checked = false; };
+$('patBusca').onclick = () => procurar();
+$('patLuta').onclick = () => lutar();
+$('patMenos').onclick = () => { pat.setor--; procurar(); };   // trocar de setor = os portais da patrulha
+$('patMais').onclick = () => { pat.setor++; procurar(); };
+
 // ---------- simulação ----------
 function passo(dt) {
   agora += dt; if (toastT > 0 && (toastT -= dt) <= 0) $('toast').textContent = '';
@@ -328,6 +404,13 @@ function passo(dt) {
   inimigos = inimigos.filter(n => !n.morto);
   if (inimigos.length < 26 && agora > proxIni) { gerarInimigo(); proxIni = agora + 2; }
   if (auto && (autoT -= dt) <= 0) { autoT = .25; pilotoAuto(); }
+  if (!$('pPat').hidden && $('patAuto').checked && (pat.t -= dt) <= 0) {
+    if (!pat.enc) procurar();
+    const rk = risco(pat.enc)[0], cheio = eu.hp >= hpMax() * .9;   // a automática foge do Perigoso e só encara o Arriscado com o casco quase cheio
+    if (rk === 'Perigoso') { pat.t = 1; procurar(); $('patRes').textContent = 'Inimigo perigoso demais: procurando outro...'; }
+    else if (eu.hp < hpMax() * .4 || (rk === 'Arriscado' && !cheio)) { pat.t = 1; $('patRes').textContent = 'Consertando o casco na Doca...'; }
+    else pat.t = Math.max(1.5, lutar());
+  }
   if (alvo && alvo.morto) alvo = null;
   if (alvo && dist(alvo, eu) > ALC_TIRO - 40) {   // mira travada: a nave persegue o alvo até ficar no alcance dos canhões
     const a = Math.atan2(eu.y - alvo.y, eu.x - alvo.x); eu.dx = limX(alvo.x + Math.cos(a) * (ALC_TIRO - 80)); eu.dy = limY(alvo.y + Math.sin(a) * (ALC_TIRO - 80)); }
