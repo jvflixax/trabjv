@@ -46,13 +46,15 @@ button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px va
 .item{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
 .item b{font-family:var(--f-display);letter-spacing:.04em;font-size:14px} .item small{color:var(--mute);font-size:12px}
 .item .acoes{grid-row:1/3;grid-column:2;display:flex;gap:6px} .item button{padding:9px 10px;font-size:11px}
-.ctl{display:grid;grid-template-columns:auto auto} #bPat{grid-column:1/3;color:var(--gold);border-color:var(--gold)}
+.ctl{display:grid;grid-template-columns:auto auto} #bPat,#bOn{color:var(--gold);border-color:var(--gold)}
 .alvoPat{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:center;padding:12px;background:rgba(5,7,13,.5);border:1px solid var(--line);border-radius:4px}
 .alvoPat b{font-family:var(--f-display);font-size:16px;letter-spacing:.04em} .alvoPat small{display:block;color:var(--mute);font-size:12px;line-height:1.6;font-variant-numeric:tabular-nums}
 .setor{display:flex;align-items:center;justify-content:space-between;gap:10px;font:700 15px var(--f-display);letter-spacing:.08em}
 .setor button{padding:8px 14px} .linha{display:flex;gap:10px;flex-wrap:wrap} .linha button{flex:1}
 .res{font-size:13px;line-height:1.6;color:var(--ink);font-variant-numeric:tabular-nums} .res .ok{color:var(--plasma)} .res .ruim{color:var(--ember)}
 .chk{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mute)} .chk input{width:20px;height:20px;accent-color:var(--plasma)}
+.campo{display:grid;gap:10px} .campo input{font:15px var(--f-body);padding:12px;background:var(--void);color:var(--ink);border:1px solid var(--line);border-radius:4px;width:100%;box-sizing:border-box}
+.campo input:focus-visible{outline:2px solid var(--plasma);outline-offset:1px}
 .r0{color:#c3cbd9} .r1{color:#5aa8ff} .r2{color:#c58cff} .r3{color:var(--gold)} .melhor{color:var(--plasma)}
 [hidden]{display:none!important}
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
@@ -68,7 +70,7 @@ button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px va
   <div class="stats"><b id="tCr">0 ▣</b><span id="tPor">Porão 0/150</span><span id="tSet">Setor 1 · 0 abates</span></div>
 </div>
 <canvas id="mini" width="300" height="188" aria-hidden="true"></canvas>
-<div class="ctl"><button id="bPat" hidden>Patrulha</button><button id="bAuto" aria-pressed="false">Piloto auto</button><button id="bOfi">Oficina</button></div>
+<div class="ctl"><button id="bPat" hidden>Patrulha</button><button id="bOn" hidden>Online</button><button id="bAuto" aria-pressed="false">Piloto auto</button><button id="bOfi">Oficina</button></div>
 <div class="toast" id="toast" role="status"></div>
 
 <div class="panel" id="pIni">
@@ -99,6 +101,29 @@ button.on{border-color:var(--plasma);color:var(--plasma);box-shadow:0 0 0 1px va
     <label class="chk"><input type="checkbox" id="patAuto"> Patrulha automática (pula inimigos perigosos e espera o conserto quando o casco cai)</label>
     <div class="res" id="patRes" role="status"></div>
     <button id="patFechar">Voltar à Doca</button>
+  </div>
+</div>
+<div class="panel" id="pOn" hidden>
+  <div class="card">
+    <h2>Online</h2>
+    <p id="onMsg" role="status"></p>
+    <form class="campo" id="onLogin" hidden>
+      <input id="onEmail" type="email" autocomplete="email" placeholder="E-mail" required>
+      <input id="onSenha" type="password" autocomplete="current-password" placeholder="Senha (mínimo 6 letras)" minlength="6" required>
+      <input id="onNome" autocomplete="nickname" placeholder="Nome do piloto (para criar conta)" maxlength="16">
+      <div class="linha"><button id="onEntrar" type="submit">Entrar</button><button id="onCriar" type="button">Criar conta</button></div>
+      <p class="dica">O nome do piloto aparece no ranking: 3 a 16 letras, números ou _. Seu progresso fica salvo na nuvem e volta se você trocar de celular.</p>
+    </form>
+    <div id="onConta" hidden>
+      <div class="setor"><span id="onEu"></span><button id="onSair">Sair</button></div>
+      <h3>Duelos</h3>
+      <p class="dica">Você enfrenta a nave salva de outro piloto: casco, escudo e poder de fogo de verdade. Vitória +20 pontos, derrota −20. O resultado é calculado no servidor.</p>
+      <div id="onRivais"></div>
+      <button id="onNovos">Procurar outros rivais</button>
+      <h3>Ranking de duelos</h3><div id="onRankD"></div>
+      <h3>Ranking de pilotos</h3><div id="onRank"></div>
+    </div>
+    <button id="onFechar">Voltar à Doca</button>
   </div>
 </div>
 <div class="panel" id="pPausa" hidden>
@@ -330,7 +355,7 @@ function hud() {
   $('bSh').style.width = (100 * eu.esc / em) + '%'; $('tSh').textContent = `${Math.ceil(eu.esc)}/${em}`;
   $('bXp').style.width = (100 * S.xp / prox) + '%'; $('tNv').textContent = `Nível ${S.nivel}`; $('tXp').textContent = `${S.xp}/${prox} xp`;
   $('tCr').textContent = `${fmt(S.banco)} ▣`; $('tSet').textContent = `Setor ${S.setor} · ${S.abates} abates`;
-  $('bPat').hidden = !rodando || dist(eu, DOCA) >= RDOCA;
+  $('bPat').hidden = $('bOn').hidden = !rodando || dist(eu, DOCA) >= RDOCA;
   $('tPor').textContent = `Porão ${fmt(S.porao)}/${fmt(pm)}`; $('tPor').classList.toggle('cheio', S.porao >= pm);
 }
 
@@ -394,7 +419,7 @@ $('bFechar').onclick = () => fechar('pOfi');
 $('bVoltar').onclick = () => fechar('pPausa');
 $('bJogar').onclick = () => { $('pIni').hidden = true; rodando = true; toast('Toque num inimigo para atirar', 4); };
 $('bRep').onclick = () => { $('pMorte').hidden = true; Object.assign(eu, {x: DOCA.x, y: DOCA.y, dx: DOCA.x, dy: DOCA.y, hp: hpMax(), esc: escAtual()}); alvo = null; rodando = true; hud(); };
-document.addEventListener('visibilitychange', () => { if (!document.hidden) return; salvar(); if (rodando && !pausado) abrir('pPausa'); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) return; salvar(); enviar(); if (rodando && !pausado) abrir('pPausa'); });
 function montarOficina() {
   const naDoca = dist(eu, DOCA) < RDOCA;
   $('ups').innerHTML = `<h3>Naves</h3>` + Object.entries(NAVES).map(([k, nv]) => {
@@ -482,6 +507,99 @@ $('patBusca').onclick = () => procurar();
 $('patLuta').onclick = () => lutar();
 $('patMenos').onclick = () => { pat.setor--; procurar(); };   // trocar de setor = os portais da patrulha
 $('patMais').onclick = () => { pat.setor++; procurar(); };
+
+// ---------- online (Supabase): conta, save na nuvem, ranking e duelos ----------
+const SUPA_URL = '', SUPA_KEY = '';   // Supabase → Project Settings → API: Project URL e a chave "anon public" (nunca a service_role)
+const SUPA_LIB = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js';
+let sb = null, conta = null, perfil = null, syncT = 0;
+const esc = t => String(t).replace(/[&<>"']/g, c => '&#' + c.charCodeAt(0) + ';');   // nomes vêm de outros jogadores
+const atributos = () => ({nave: S.nave, nivel: S.nivel, abates: S.abates, poder: Math.max(1, Math.round(danoAtual() / intervalo())), casco: hpMax(), escudo: escAtual()});
+// mesma conta da função duelar do servidor, sem a sorte: < 1 favorece quem desafia
+const razaoDuelo = (eu, ele) => ((ele.casco + ele.escudo) / Math.max(1, eu.poder)) / ((eu.casco + eu.escudo) / Math.max(1, ele.poder));
+function msgOn(t, cls = '') { $('onMsg').className = 'res ' + cls; $('onMsg').textContent = t; }
+function erroOn(e) {
+  const m = String(e && (e.message || e.error_description) || e);
+  if (/fetch|network|Failed|Load failed|Sem conexão/i.test(m)) return msgOn('Não consegui falar com o servidor. Confira a internet. Se estiver jogando pelo link do Claude, abra pelo link do GitHub Pages: o link do Claude bloqueia conexões externas.', 'ruim');
+  if (/Invalid login/i.test(m)) return msgOn('E-mail ou senha incorretos.', 'ruim');
+  if (/already registered/i.test(m)) return msgOn('Esse e-mail já tem conta. Toque em Entrar.', 'ruim');
+  if (/duplicate key|pilotos_nome_key/i.test(m)) return msgOn('Esse nome de piloto já está em uso. Escolha outro.', 'ruim');
+  if (/pilotos_nome_check/i.test(m)) return msgOn('O nome precisa ter de 3 a 16 letras, números ou _ (sem espaço nem acento).', 'ruim');
+  msgOn(m, 'ruim');
+}
+async function cliente() {
+  if (!SUPA_URL || !SUPA_KEY) throw new Error('O modo online ainda não foi ligado: falta configurar o servidor (Supabase).');
+  if (!sb) {
+    if (!window.supabase) await new Promise((ok, falha) => { const el = document.createElement('script'); el.src = SUPA_LIB; el.onload = ok; el.onerror = () => falha(new Error('Sem conexão com a internet.')); document.head.appendChild(el); });
+    sb = window.supabase.createClient(SUPA_URL, SUPA_KEY);
+  }
+  return sb;
+}
+async function abrirOnline() {
+  $('pOn').hidden = false; $('onLogin').hidden = $('onConta').hidden = true; msgOn('Conectando...');
+  try { await cliente(); const {data} = await sb.auth.getSession(); conta = data.session && data.session.user; await telaOnline(); } catch (e) { erroOn(e); }
+}
+async function telaOnline() {
+  if (!conta) { perfil = null; $('onLogin').hidden = false; $('onConta').hidden = true; msgOn('Entre ou crie uma conta para salvar na nuvem, aparecer no ranking e duelar.'); return; }
+  const {data, error} = await sb.from('pilotos').select('*').eq('id', conta.id).maybeSingle(); if (error) throw error;
+  perfil = data;
+  if (!perfil) {   // conta nova: cria o piloto com o nome digitado
+    const nome = $('onNome').value.trim();
+    if (!nome) { $('onLogin').hidden = false; $('onConta').hidden = true; msgOn('Falta o nome do piloto. Digite um nome e toque em Entrar.'); return; }
+    const ins = await sb.from('pilotos').insert({id: conta.id, nome, ...atributos()}).select().single(); if (ins.error) throw ins.error;
+    perfil = ins.data;
+  }
+  // shortcut: fica o save com mais abates (sem juntar os dois); trocar por escolha do jogador se houver reclamação
+  const sv = await sb.from('saves').select('dados').eq('id', conta.id).maybeSingle(); if (sv.error) throw sv.error;
+  if (sv.data && sv.data.dados && (sv.data.dados.abates || 0) > S.abates) { S = migrar(sv.data.dados); eu.hp = hpMax(); eu.esc = escAtual(); salvar(); hud(); toast('Progresso da nuvem carregado'); }
+  await enviar();
+  $('onLogin').hidden = true; $('onConta').hidden = false; msgOn('');
+  $('onEu').textContent = `${perfil.nome} · ${perfil.pontos} pontos`;
+  await Promise.all([rivais(), rankings()]);
+}
+async function enviar() {
+  if (!sb || !conta || !perfil) return;
+  try {
+    const agoraISO = new Date().toISOString();
+    const [a, b] = await Promise.all([sb.from('pilotos').update({...atributos(), atualizado: agoraISO}).eq('id', conta.id), sb.from('saves').upsert({id: conta.id, dados: S, atualizado: agoraISO})]);
+    if (a.error || b.error) console.warn('online: falha ao salvar', a.error || b.error);
+  } catch (e) { console.warn('online: sem conexão', e); }
+}
+async function rivais() {
+  const eu = atributos(), {data, error} = await sb.from('pilotos').select('id,nome,nivel,nave,poder,casco,escudo,pontos').neq('id', conta.id).gte('pontos', perfil.pontos - 200).lte('pontos', perfil.pontos + 200).limit(30);
+  if (error) throw error;
+  let lista = data;
+  if (lista.length < 3) { const mais = await sb.from('pilotos').select('id,nome,nivel,nave,poder,casco,escudo,pontos').neq('id', conta.id).order('pontos', {ascending: false}).limit(10); if (mais.error) throw mais.error; lista = mais.data; }
+  lista = lista.sort(() => Math.random() - .5).slice(0, 5);
+  $('onRivais').innerHTML = lista.length ? lista.map(p => { const x = razaoDuelo(eu, p), [rt, rc] = x < .8 ? ['Fácil', 'ok'] : x < 1.2 ? ['Equilibrado', ''] : ['Difícil', 'ruim'];
+    return `<div class="item"><b>${esc(p.nome)}</b><small>Nível ${p.nivel} · ${esc((NAVES[p.nave] || NAVES.sucata).nome)} · ${p.pontos} pts · <span class="res ${rc}">${rt}</span></small><div class="acoes"><button data-duelo="${esc(p.id)}">Desafiar</button></div></div>`; }).join('')
+    : '<p class="dica">Ainda não há outros pilotos. Chame os amigos para criar conta!</p>';
+}
+async function rankings() {
+  const [d, n] = await Promise.all([sb.from('pilotos').select('nome,pontos,nivel').order('pontos', {ascending: false}).limit(10), sb.from('pilotos').select('nome,nivel,abates,nave').order('nivel', {ascending: false}).order('abates', {ascending: false}).limit(10)]);
+  if (d.error || n.error) throw d.error || n.error;
+  $('onRankD').innerHTML = d.data.map((p, i) => `<div class="item"><b>${i + 1}. ${esc(p.nome)}</b><small>${p.pontos} pontos · nível ${p.nivel}</small></div>`).join('');
+  $('onRank').innerHTML = n.data.map((p, i) => `<div class="item"><b>${i + 1}. ${esc(p.nome)}</b><small>Nível ${p.nivel} · ${fmt(p.abates)} abates · ${esc((NAVES[p.nave] || NAVES.sucata).nome)}</small></div>`).join('');
+}
+$('bOn').onclick = () => { if (auto) $('bAuto').onclick(); abrirOnline(); };
+$('onFechar').onclick = () => { $('pOn').hidden = true; };
+$('onLogin').onsubmit = async ev => { ev.preventDefault(); msgOn('Entrando...');
+  try { const {data, error} = await sb.auth.signInWithPassword({email: $('onEmail').value.trim(), password: $('onSenha').value}); if (error) throw error; conta = data.user; await telaOnline(); } catch (e) { erroOn(e); } };
+$('onCriar').onclick = async () => {
+  const nome = $('onNome').value.trim();
+  if (!/^[A-Za-z0-9_]{3,16}$/.test(nome)) return msgOn('Escolha um nome de piloto com 3 a 16 letras, números ou _ (sem espaço nem acento).', 'ruim');
+  if (!$('onLogin').reportValidity()) return;
+  msgOn('Criando conta...');
+  try { const {data, error} = await sb.auth.signUp({email: $('onEmail').value.trim(), password: $('onSenha').value}); if (error) throw error;
+    if (!data.session) return msgOn('Conta criada! Abra o e-mail de confirmação, confirme e depois toque em Entrar (com o nome do piloto preenchido).', 'ok');
+    conta = data.user; await telaOnline(); } catch (e) { erroOn(e); } };
+$('onSair').onclick = async () => { await enviar(); await sb.auth.signOut(); conta = perfil = null; telaOnline(); };
+$('onNovos').onclick = () => rivais().catch(erroOn);
+$('onRivais').onclick = async e => { const id = e.target.dataset && e.target.dataset.duelo; if (!id) return;
+  e.target.disabled = true; msgOn('Duelando...');
+  try { await enviar(); const {data, error} = await sb.rpc('duelar', {defensor_id: id}); if (error) throw error;
+    perfil.pontos = data.pontos; $('onEu').textContent = `${perfil.nome} · ${perfil.pontos} pontos`;
+    msgOn(data.venceu ? `Vitória em ${data.tempo} s! +20 pontos.` : `Derrota em ${data.tempo} s. −20 pontos. Melhore a nave e tente de novo.`, data.venceu ? 'ok' : 'ruim');
+    await rankings(); } catch (err) { e.target.disabled = false; erroOn(err); } };
 
 // ---------- simulação ----------
 function passo(dt) {
@@ -575,6 +693,7 @@ function passo(dt) {
   for (const t of textos) { t.vida -= dt; t.y -= 40 * dt; }
   textos = textos.filter(t => t.vida > 0);
   if ((salvarT += dt) > 3) { salvarT = 0; salvar(); }
+  if (conta && (syncT += dt) > 30) { syncT = 0; enviar(); }
 }
 
 // ---------- desenho ----------
